@@ -1,4 +1,4 @@
-package com.example.daybyday
+package com.novastack.daybyday
 
 import java.time.LocalDate
 import java.time.LocalDateTime

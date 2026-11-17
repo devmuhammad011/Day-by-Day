@@ -3,14 +3,14 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 android {
-    namespace = "com.example.daybyday"
+    namespace = "com.novastack.daybyday"
     compileSdk = 35
     defaultConfig {
-        applicationId = "com.example.daybyday"
+        applicationId = "com.novastack.daybyday"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "2.0"
+        versionCode = 3
+        versionName = "2.1"
     }
     buildFeatures { compose = true }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }

@@ -1,4 +1,4 @@
-package com.example.daybyday
+package com.novastack.daybyday
 
 import android.content.Context
 import org.json.JSONArray

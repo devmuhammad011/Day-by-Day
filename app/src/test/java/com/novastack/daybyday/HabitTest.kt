@@ -1,4 +1,4 @@
-package com.example.daybyday
+package com.novastack.daybyday
 
 import org.junit.Assert.*
 import org.junit.Test
@@ -30,6 +30,20 @@ class HabitTest {
     @Test fun reminderMovesToNextWeekWhenTodaysTimeHasPassed() {
         val h = habit(days = setOf(1)).copy(reminder = "08:00")
         assertEquals(today.plusDays(7).atTime(8,0), h.nextReminder(today.atTime(9,0)))
+    }
+    @Test fun futureStartDoesNotScheduleEarly() {
+        val h = habit().copy(created = today.plusDays(3), reminder = "08:00")
+        assertFalse(h.scheduled(today))
+        assertEquals(today.plusDays(3).atTime(8, 0), h.nextReminder(today.atTime(7, 0)))
+    }
+    @Test fun noonAndMidnightKeepTheirMeaning() {
+        val midnight = habit().copy(reminder = "00:00")
+        val noon = habit().copy(reminder = "12:00")
+        val before = today.minusDays(1).atTime(23, 59)
+        assertEquals(today.atStartOfDay(), midnight.nextReminder(before))
+        assertEquals(today.atTime(12, 0), noon.nextReminder(before))
+        assertEquals("12:00 AM", java.time.LocalTime.MIDNIGHT.format(java.time.format.DateTimeFormatter.ofPattern("h:mm a", java.util.Locale.ENGLISH)))
+        assertEquals("12:00 PM", java.time.LocalTime.NOON.format(java.time.format.DateTimeFormatter.ofPattern("h:mm a", java.util.Locale.ENGLISH)))
     }
     @Test fun noCompletionBeforeCreation() {
         val h = Habit(name = "New", created = today)

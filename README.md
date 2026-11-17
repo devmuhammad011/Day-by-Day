@@ -31,3 +31,10 @@ Unit tests cover scheduled-day streaks, rest days, missed days, reversible check
 ## Scope
 
 The interface is currently English; Hausa is an optional TTS preference, dependent on voices installed on the device. No account, cloud sync, ads, widget or quantitative habit targets. No internet permission. Force-stopping the app disables scheduled alarms until the app is reopened. Quiet-hour reminders are skipped, not replayed later.
+
+
+## Version 2.1
+
+Application ID / namespace: `com.novastack.daybyday`. This is a separate Android app from the previous `com.example` build: export a backup from 2.0, install 2.1 alongside it, then restore your backup. Device-specific notification/alarm permissions must be granted again.
+
+Habit setup now has a native calendar picker (today by default) and native 12-hour time picker with AM/PM. Reminder times are stored internally as 24-hour `HH:mm`; cards display AM/PM. Start dates may be past or future, but editing cannot move the start after an existing check-in. Future habits begin on the first selected weekday on or after that date.

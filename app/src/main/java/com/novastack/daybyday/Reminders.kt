@@ -1,4 +1,4 @@
-package com.example.daybyday
+package com.novastack.daybyday
 
 import android.Manifest
 import android.app.*
@@ -72,7 +72,7 @@ class ReminderReceiver : BroadcastReceiver() {
         val snooze = PendingIntent.getBroadcast(context, 0,
             Intent(context, ReminderReceiver::class.java).setAction("SNOOZE").setData(Uri.parse("daybyday://snooze/${Uri.encode(habit.id)}")).putExtra("id", habit.id),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        val notification = Notification.Builder(context, ReminderScheduler.CHANNEL).setSmallIcon(com.example.daybyday.R.drawable.ic_notification)
+        val notification = Notification.Builder(context, ReminderScheduler.CHANNEL).setSmallIcon(com.novastack.daybyday.R.drawable.ic_notification)
             .setContentTitle(habit.name).setContentText("Time for a small step. Open Day by Day to check in.")
             .setContentIntent(open).setAutoCancel(true).addAction(Notification.Action.Builder(null, "Snooze 10 min", snooze).build()).build()
         context.getSystemService(NotificationManager::class.java).notify(habit.id, 1, notification)
