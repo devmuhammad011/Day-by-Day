@@ -82,6 +82,9 @@ jobs:
           mkdir -p "$HOME/.android"
           cp ./debug.keystore "$HOME/.android/debug.keystore"
 
+      - name: Verify habit scheduling and streaks
+        run: gradle :app:testDebugUnitTest --stacktrace --no-daemon
+
       - name: Build debug APK
         run: gradle :app:assembleDebug --stacktrace --no-daemon
 

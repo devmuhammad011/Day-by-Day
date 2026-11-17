@@ -1,36 +1,33 @@
-# Day by Day — native Android habit tracker
+# Day by Day 2.0
 
-Kotlin and Jetpack Compose, Android 8.0+ (API 26). Daily habits, selectable emoji, daily check-ins with undo, seven-day history, current streaks, weekly completion totals, editing, and confirmed deletion. Three starter habits can be edited or removed. All data stays in app-private SharedPreferences; no account or internet permission. Uninstalling clears history. Android backup is disabled.
+Native Kotlin / Jetpack Compose habit tracker, Android 8.0+ (API 26).
 
-## Open and run
+## Features
 
-1. Install Android Studio, then open this folder as a project.
-2. Use JDK 17 or 21, Android SDK 35 and Gradle 9.3.1 (AGP 9.1.1).
-3. This source distribution does not include a Gradle wrapper. With Gradle 9.3.1 installed, run `gradle wrapper --gradle-version 9.3.1` in this folder. Android Studio can use a locally installed Gradle distribution in its Gradle settings.
-4. Sync, select an Android emulator or connected phone, and run `app`.
-5. Run `./gradlew testDebugUnitTest assembleDebug`. The APK will be at `app/build/outputs/apk/debug/app-debug.apk`.
+- Forest-green dashboard with curved cards, daily completion ring, next reminder, seven-day bar chart, current streaks, and 30-day completion counts. Every metric uses actual habit data.
+- Custom sprout/check launcher logo and notification icon; dark forest and light cream themes.
+- Create, edit, delete and check off habits; select weekdays; undo check-ins for the last seven days. Streaks count consecutive scheduled days and skip rest days.
+- Local notification reminders, precise timing with optional system permission, and a 10-minute snooze action. Reschedules on reboot or timezone/time changes. Completed habits are skipped.
+- Optional per-habit spoken reminders using Android Text-to-Speech. Enable notifications and precise alarms before selecting voice. Preferences: include current time, prefer Hausa (English fallback), quiet hours 22:00–07:00. Voice respects silent mode, Do Not Disturb, active music and audio focus. Preview voice in Settings. Requires an installed working TTS engine; background restrictions can suppress voice while leaving the normal notification available. Approximate alarms can be delayed.
+- Export JSON backup through Android's document picker; validate and confirm before replacing habits from a backup. Maximum 1 MB / 1000 habits. Voice is disabled on restore until explicitly enabled. Backups include names, schedules and check-ins, not device preferences; store them privately.
+- Existing version-1 saved habits migrate in memory with daily schedules and no reminders; no data reset is performed. Unreadable data is left untouched, editing is blocked, and backup restore remains available.
 
-## Behavior
+## Signing and updates — read before installing
 
-Habits repeat every day starting on their creation date. Tap a date in the last seven days to check or correct completions. Streaks include consecutive completed days ending today, or yesterday while today is still pending. Weekly totals only count days on or after each habit's creation. Progress shows seven dots per habit, oldest to newest, with dashes before creation. Dates follow the device's local timezone and refresh when the app resumes or the date changes.
+The requested workflow generates a new temporary debug key on each run. APKs from different runs are therefore signed differently. Android may require uninstalling the older APK before installing a new one, which DELETES its local data. Version 1 did not include an export screen; record any important check-ins before uninstalling it. Version 2 has export/restore, so export before future updates and restore afterwards. Automatic backups are disabled. A stable securely managed signing key is needed for future seamless updates; this project does not contain one.
 
-## Verification status
+## Build and APK download
 
-Source and configuration have been reviewed. Unit tests cover streak gaps, a pending current day, and reversible check-ins. They have not been executed: this environment has Java but no Android SDK, Gradle, or Kotlin compiler, and downloads failed because its configured proxy was unreachable. No APK has been built or device UI test performed.
+Open the folder in Android Studio with Android SDK 35, Java 17+, and exactly Gradle 9.3.1. The version catalog pins AGP 9.1.1 and Compose compiler 2.2.10, using AGP's built-in Kotlin support. There is no Gradle wrapper in this source distribution.
+
+GitHub Actions runs on pushes to main and manual dispatch. It installs supported SDK packages (not the removed `tools` package), sets Temurin Java 17 and Gradle 9.3.1, runs `gradle :app:testDebugUnitTest --stacktrace --no-daemon`, then builds with `gradle :app:assembleDebug --stacktrace --no-daemon`.
+
+The expected APK is `app/build/outputs/apk/debug/app-debug.apk`. The workflow uploads only that file as artifact `app-debug-apk`, then publishes a latest release with tag `debug-apk-build-<run-number>-<run-attempt>` and asset `<repository-name>-debug-build-<run-number>.apk`. Release failures leave the Actions artifact available. Uses only the built-in GitHub token. Temporary signing keys are never cached or uploaded and are removed by cleanup.
+
+## Verification
+
+Unit tests cover scheduled-day streaks, rest days, missed days, reversible check-ins, creation boundaries and future reminder times. Workflow shell syntax and Android XML are checked during development. CI verifies compilation, tests and APK packaging; reminders, TTS, document-picker backups, accessibility and responsive UI still require real-device verification. No emulator or device is attached in the development environment.
 
 ## Scope
 
-This first version is offline and daily-only. Reminders, cloud sync, custom schedules, data export, widgets, and Play Store signing are not implemented.
-
-
-## Automatic APK downloads with GitHub Actions
-
-Upload the contents of this folder to the root of your GitHub repository, including `.github/workflows/build-apk.yml` and `gradle/libs.versions.toml`. Files such as `.github` and `.gitignore` may be hidden in your file manager: enable showing hidden files. Do not upload the ZIP as a single repository file. Commit to `main`, or run **Actions → Build and publish debug APK → Run workflow**.
-
-The workflow uses Temurin Java 17, exactly Gradle 9.3.1, and `gradle :app:assembleDebug --stacktrace --no-daemon`. It uploads `app/build/outputs/apk/debug/app-debug.apk` as the Actions artifact **app-debug-apk**, then creates a published latest GitHub Release with a directly downloadable APK. Tags use `debug-apk-build-<run-number>-<run-attempt>`; asset filenames use `<sanitized-repository-name>-debug-build-<run-number>.apk`. Release errors produce warnings and leave the successful Actions artifact available. Only the built-in GitHub token is used.
-
-AGP 9 uses built-in Kotlin support; the old Kotlin Android plugin and legacy `kotlinOptions` configuration were removed. The version catalog pins AGP 9.1.1 and Compose compiler plugin 2.2.10. The app source, features, application ID and Android resources were not changed for this migration.
-
-A fresh temporary debug signing key is generated on each runner and copied to AGP's default debug-key location. The keys are not cached or uploaded and are removed by a final cleanup step. APKs from different runs may have different signing keys, so installing an update may require uninstalling the previous app, which clears its local habit data.
-
-This migration and workflow have been checked statically, but no build or GitHub workflow run has been performed here. No APK or release exists yet. The first GitHub Actions run must confirm build compatibility. The updated ZIP excludes Git history and contains uncommitted working-tree changes for you to upload manually.
+The interface is currently English; Hausa is an optional TTS preference, dependent on voices installed on the device. No account, cloud sync, ads, widget or quantitative habit targets. No internet permission. Force-stopping the app disables scheduled alarms until the app is reopened. Quiet-hour reminders are skipped, not replayed later.
