@@ -1,6 +1,10 @@
 package com.novastack.daybyday
 
 import android.os.Bundle
+import android.app.KeyguardManager
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.compose.ui.platform.LocalContext
 import android.os.SystemClock
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -32,6 +36,9 @@ import java.util.Locale
 class TimerActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val showOnLockScreen = getSharedPreferences("settings", MODE_PRIVATE).getBoolean("lockTimer", true)
+        if (android.os.Build.VERSION.SDK_INT >= 27) setShowWhenLocked(showOnLockScreen)
+        else if (showOnLockScreen) window.addFlags(android.view.WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED)
         val timer = FocusTimer(this)
         val requested = try { HabitStore(this).load().find { it.id == intent.getStringExtra("habitId") && it.durationMinutes > 0 } } catch (_: Exception) { null }
         val existing = timer.load()
@@ -49,6 +56,11 @@ class TimerActivity : ComponentActivity() {
                     confirmButton = { TextButton(onClick = { timer.clear(); timer.start(requested); replace = false }) { Text("Replace timer") } },
                     dismissButton = { TextButton(onClick = { replace = false }) { Text("Keep current") } })
                 TimerScreen(timer, onBack = { finish() }, onComplete = {
+                    val keyguard = getSystemService(KeyguardManager::class.java)
+                    if (keyguard.isKeyguardLocked) {
+                        keyguard.requestDismissKeyguard(this, null)
+                        return@TimerScreen "Unlock your phone, then tap Mark habit complete to save your check-in."
+                    }
                     val id = timer.load()?.habitId
                     val store = HabitStore(this)
                     try {
@@ -77,7 +89,15 @@ private fun TimerScreen(timer: FocusTimer, onBack: () -> Unit, onComplete: () ->
     var remaining by remember { mutableLongStateOf(session?.clock?.remaining(SystemClock.elapsedRealtime()) ?: 0) }
     var confirmReset by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(Unit) {
+    val owner = LocalContext.current as ComponentActivity
+    var visible by remember { mutableStateOf(owner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) }
+    DisposableEffect(owner) {
+        val observer = LifecycleEventObserver { _, _ -> visible = owner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED) }
+        owner.lifecycle.addObserver(observer)
+        onDispose { owner.lifecycle.removeObserver(observer) }
+    }
+    LaunchedEffect(visible) {
+        if (!visible) return@LaunchedEffect
         while (true) {
             session = timer.load()
             remaining = session?.clock?.remaining(SystemClock.elapsedRealtime()) ?: 0
@@ -119,7 +139,7 @@ private fun TimerScreen(timer: FocusTimer, onBack: () -> Unit, onComplete: () ->
                 if (remaining > 0L) Button(onClick = { timer.toggle(); session = timer.load() }, modifier = Modifier.fillMaxWidth().height(54.dp)) { Text(if (s.clock.running) "Pause session" else "Resume session") }
                 else Button(onClick = { message = onComplete() }, modifier = Modifier.fillMaxWidth()) { Text("Mark habit complete") }
                 OutlinedButton(onClick = { confirmReset = true }, modifier = Modifier.fillMaxWidth()) { Text("Reset timer") }
-                Text("The timer keeps time when the screen is off. Allow notifications and precise alarms for timely completion alerts. After a reboot, it pauses for you to review.", color = Color(0xFFB2CBC1), fontSize = 11.sp)
+                Text("View timer from its lock-screen notification. The timer keeps time when the screen is off. Allow notifications and precise alarms for timely completion alerts. After a reboot, it pauses for you to review.", color = Color(0xFFB2CBC1), fontSize = 11.sp)
             } else Text("Choose a habit with a focus duration, then tap Start.")
         }
     }

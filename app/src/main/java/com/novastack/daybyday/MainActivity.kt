@@ -75,6 +75,8 @@ private fun DayByDay(activity: MainActivity) {
     var dark by remember { mutableStateOf(prefs.getBoolean("dark", true)) }
     var quiet by remember { mutableStateOf(prefs.getBoolean("quiet", false)) }
     var hausa by remember { mutableStateOf(prefs.getBoolean("hausaVoice", false)) }
+    var lockTimer by remember { mutableStateOf(prefs.getBoolean("lockTimer", true)) }
+    var speakTimerEnd by remember { mutableStateOf(prefs.getBoolean("speakTimerEnd", false)) }
     var sayTime by remember { mutableStateOf(prefs.getBoolean("sayTime", true)) }
     var notifications by remember { mutableStateOf(notificationsAllowed(activity)) }
     var exact by remember { mutableStateOf(ReminderScheduler.exactAllowed(activity)) }
@@ -241,6 +243,13 @@ private fun DayByDay(activity: MainActivity) {
                             catch (_: Exception) { message = "Open phone Settings → Apps → Special app access → Alarms & reminders." }
                         }) { Text("Allow precise reminders") }
                         Text("Enable a time and voice inside each habit. Voice needs notification and precise-alarm access; Android or battery restrictions may still delay delivery.", fontSize = 12.sp)
+                        SettingToggle("Timer on lock screen", "Show live countdown and task name; your phone's lock-screen notification settings also apply", lockTimer) {
+                            lockTimer = it; prefs.edit().putBoolean("lockTimer", it).apply(); FocusTimer(activity).update()
+                        }
+                        SettingToggle("Speak when timer ends", "Announce task completion aloud; needs notifications, precise alarms and a working TTS voice", speakTimerEnd) {
+                            speakTimerEnd = it; prefs.edit().putBoolean("speakTimerEnd", it).apply()
+                        }
+                        Text("Tap View timer on its notification to open the large countdown before unlocking. Check-ins still require unlocking. Android controls whether silent notifications appear on your lock screen.", fontSize = 12.sp)
                         SettingToggle("Quiet hours", "No reminders or speech from 10 PM to 7 AM", quiet) { quiet = it; prefs.edit().putBoolean("quiet", it).apply() }
                         SettingToggle("Say the current time", "Include time before the habit name", sayTime) { sayTime = it; prefs.edit().putBoolean("sayTime", it).apply() }
                         SettingToggle("Prefer Hausa voice", "Uses English if your TTS engine lacks Hausa", hausa) { hausa = it; prefs.edit().putBoolean("hausaVoice", it).apply() }
@@ -257,7 +266,7 @@ private fun DayByDay(activity: MainActivity) {
                         OutlinedButton(onClick = { restore.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) }) { Text("Restore backup") }
                         Text("Restoring replaces your current habits after confirmation. Export a backup first.", fontSize = 12.sp)
                     } }
-                    item { Text("DailyStride • Version 2.3\nSmall steps. Lasting change.", color = colors.primary, modifier = Modifier.padding(vertical = 16.dp)) }
+                    item { Text("DailyStride • Version 2.4\nSmall steps. Lasting change.", color = colors.primary, modifier = Modifier.padding(vertical = 16.dp)) }
                 }
             }
         }

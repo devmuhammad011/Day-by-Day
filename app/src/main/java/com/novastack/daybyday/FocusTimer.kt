@@ -52,12 +52,20 @@ class FocusTimer(private val context: Context) {
         val alarms = context.getSystemService(AlarmManager::class.java)
         alarms.cancel(alarm())
         if (remaining == 0L) { finish(); return }
-        notifyManager().createNotificationChannel(NotificationChannel("focus_progress", "Focus timer progress", NotificationManager.IMPORTANCE_LOW))
+        val showOnLockScreen = context.getSharedPreferences("settings", Context.MODE_PRIVATE).getBoolean("lockTimer", true)
+        notifyManager().createNotificationChannel(NotificationChannel("focus_progress", "Focus timer progress", NotificationManager.IMPORTANCE_LOW).apply {
+            description = "Live countdown with pause and resume, including on the lock screen when allowed"
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+        })
         val open = PendingIntent.getActivity(context, 902, Intent(context, TimerActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val toggle = PendingIntent.getBroadcast(context, 903, Intent(context, FocusReceiver::class.java).setAction("TOGGLE"), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val builder = Notification.Builder(context, "focus_progress").setSmallIcon(R.drawable.ic_notification).setContentTitle(s.name)
             .setContentText(if (s.clock.running) "Focus timer running • Tap to open" else "Paused • ${remaining / 60000}:${"%02d".format((remaining / 1000) % 60)} remaining")
             .setContentIntent(open).setOngoing(true).setOnlyAlertOnce(true)
+            .setCategory(Notification.CATEGORY_ALARM)
+            .setVisibility(if (showOnLockScreen) Notification.VISIBILITY_PUBLIC else Notification.VISIBILITY_SECRET)
+            .setSubText("DailyStride • Focus timer")
+            .addAction(Notification.Action.Builder(null, "View timer", open).build())
             .addAction(Notification.Action.Builder(null, if (s.clock.running) "Pause" else "Resume", toggle).build())
         if (s.clock.running) builder.setWhen(System.currentTimeMillis() + remaining).setUsesChronometer(true).setChronometerCountDown(true)
         try { notifyManager().notify(901, builder.build()) } catch (_: SecurityException) { }
@@ -81,6 +89,13 @@ class FocusTimer(private val context: Context) {
             .setContentTitle("Focus complete: ${s.name}").setContentText("Your session is complete. Open to check in.")
             .setContentIntent(open).setAutoCancel(true).build()
         try { notifyManager().notify(904, notification) } catch (_: SecurityException) { }
+        val settings = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
+        if (settings.getBoolean("speakTimerEnd", false) && ReminderScheduler.exactAllowed(context) && notifyManager().areNotificationsEnabled()) {
+            try {
+                context.startForegroundService(Intent(context, VoiceReminderService::class.java)
+                    .putExtra("name", s.name).putExtra("completedTimer", true))
+            } catch (_: Exception) { /* Completion notification stays available when Android blocks background speech. */ }
+        }
     }
 }
 

@@ -93,6 +93,7 @@ class VoiceReminderService : Service(), TextToSpeech.OnInitListener {
     private var focus: AudioFocusRequest? = null
     private val handler = Handler(Looper.getMainLooper())
     private var taskName = ""
+    private var completedTimer = false
     override fun onBind(intent: Intent?) = null
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         ReminderScheduler.channel(this)
@@ -103,6 +104,7 @@ class VoiceReminderService : Service(), TextToSpeech.OnInitListener {
             .setContentTitle("DailyStride voice reminder").setContentText("Speaking your selected habit reminder")
             .setContentIntent(open).setOnlyAlertOnce(true).build())
         taskName = intent?.getStringExtra("name") ?: "Your habit"
+        completedTimer = intent?.getBooleanExtra("completedTimer", false) ?: false
         val audio = getSystemService(AudioManager::class.java)
         if (ReminderScheduler.quiet(this) || getSystemService(NotificationManager::class.java).currentInterruptionFilter != NotificationManager.INTERRUPTION_FILTER_ALL || audio.ringerMode != AudioManager.RINGER_MODE_NORMAL || audio.isMusicActive) { stopSelf(); return START_NOT_STICKY }
         if (tts != null) { stopSelf(); return START_NOT_STICKY }
@@ -131,7 +133,9 @@ class VoiceReminderService : Service(), TextToSpeech.OnInitListener {
         })
         val time = LocalTime.now().format(DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH))
         val prefix = if (prefs.getBoolean("sayTime", true)) if (hausa) "Yanzu karfe $time. " else "It is $time. " else ""
-        val text = prefix + if (hausa) "Lokacin $taskName ya yi." else "Time for $taskName."
+        val text = prefix + if (completedTimer) {
+            if (hausa) "Lokacin aikin $taskName ya cika. Ka yi kokari!" else "Your focus session for $taskName is complete. Well done!"
+        } else if (hausa) "Lokacin $taskName ya yi." else "Time for $taskName."
         if (engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, "habit") == TextToSpeech.ERROR) stopSelf()
     }
     override fun onDestroy() {
