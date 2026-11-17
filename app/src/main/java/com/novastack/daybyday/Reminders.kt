@@ -72,9 +72,14 @@ class ReminderReceiver : BroadcastReceiver() {
         val snooze = PendingIntent.getBroadcast(context, 0,
             Intent(context, ReminderReceiver::class.java).setAction("SNOOZE").setData(Uri.parse("daybyday://snooze/${Uri.encode(habit.id)}")).putExtra("id", habit.id),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        val notification = Notification.Builder(context, ReminderScheduler.CHANNEL).setSmallIcon(com.novastack.daybyday.R.drawable.ic_notification)
+        val start = PendingIntent.getActivity(context, 0,
+            Intent(context, TimerActivity::class.java).setData(Uri.parse("daybyday://timer/${Uri.encode(habit.id)}")).putExtra("habitId", habit.id),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val builder = Notification.Builder(context, ReminderScheduler.CHANNEL).setSmallIcon(com.novastack.daybyday.R.drawable.ic_notification)
             .setContentTitle(habit.name).setContentText("Time for a small step. Open Day by Day to check in.")
-            .setContentIntent(open).setAutoCancel(true).addAction(Notification.Action.Builder(null, "Snooze 10 min", snooze).build()).build()
+            .setContentIntent(open).setAutoCancel(true).addAction(Notification.Action.Builder(null, "Remind in 10 min", snooze).build())
+        if (habit.durationMinutes > 0) builder.addAction(Notification.Action.Builder(null, "Start", start).build())
+        val notification = builder.build()
         context.getSystemService(NotificationManager::class.java).notify(habit.id, 1, notification)
         if (habit.voice && ReminderScheduler.exactAllowed(context)) {
             try { context.startForegroundService(Intent(context, VoiceReminderService::class.java).putExtra("name", habit.name)) }

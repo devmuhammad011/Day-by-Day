@@ -38,3 +38,12 @@ The interface is currently English; Hausa is an optional TTS preference, depende
 Application ID / namespace: `com.novastack.daybyday`. This is a separate Android app from the previous `com.example` build: export a backup from 2.0, install 2.1 alongside it, then restore your backup. Device-specific notification/alarm permissions must be granted again.
 
 Habit setup now has a native calendar picker (today by default) and native 12-hour time picker with AM/PM. Reminder times are stored internally as 24-hour `HH:mm`; cards display AM/PM. Start dates may be past or future, but editing cannot move the start after an existing check-in. Future habits begin on the first selected weekday on or after that date.
+
+
+## Version 2.2 — Focus timer
+
+Optional per-habit duration (1 minute to 24 hours), Start action alongside the 10-minute reminder snooze, and a dedicated focus screen. Shows total duration, remaining and elapsed time, a main progress ring and millisecond ring, pause/resume, and confirmed reset. One active session; replacing another session requires confirmation. Completion offers an explicit check-in, only on a scheduled day.
+
+The countdown uses Android's monotonic elapsed clock (including sleep), persisted state, a system notification chronometer and an AlarmManager completion alarm; it does not rely on a continuously running app or foreground service. Exact-alarm permission improves completion alert timing; otherwise the alert can be delayed. Displayed milliseconds are visual progress, not precision timing guarantees. After reboot, the session pauses using a bounded wall-clock estimate; force-stop prevents alerts until the app is reopened. Timer state is not part of backups; habit durations are. Old backup formats 1 and 2 remain readable.
+
+Before installing another debug build, export your habits: the temporary signing key still changes between builds and an uninstall may be needed, which clears local data.

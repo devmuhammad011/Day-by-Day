@@ -32,6 +32,8 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
@@ -86,6 +88,8 @@ private fun DayByDay(activity: MainActivity) {
         try {
             check(loadError == null) { "Restore your backup before editing unreadable data." }
             store.save(next)
+            val activeId = FocusTimer(activity).load()?.habitId
+            if (activeId != null && next.none { it.id == activeId }) FocusTimer(activity).clear()
             ReminderScheduler.sync(activity, habits, next)
             habits = next
         } catch (e: Exception) { message = e.message ?: "Could not save changes." }
@@ -123,6 +127,7 @@ private fun DayByDay(activity: MainActivity) {
     DisposableEffect(activity) {
         val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) {
             refresh()
+            if (loadError == null) try { habits = store.load() } catch (_: Exception) { }
             if (loadError == null) habits.forEach { ReminderScheduler.schedule(activity, it) }
         } }
         activity.lifecycle.addObserver(observer)
@@ -247,14 +252,14 @@ private fun DayByDay(activity: MainActivity) {
                         OutlinedButton(onClick = { restore.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) }) { Text("Restore backup") }
                         Text("Restoring replaces your current habits after confirmation. Export a backup first.", fontSize = 12.sp)
                     } }
-                    item { Text("Day by Day • Version 2.1\nBuilt for small steps, every day.", color = colors.primary, modifier = Modifier.padding(vertical = 16.dp)) }
+                    item { Text("Day by Day • Version 2.2\nBuilt for small steps, every day.", color = colors.primary, modifier = Modifier.padding(vertical = 16.dp)) }
                 }
             }
         }
-        if (showEditor) HabitEditor(editing, notifications && exact, onDismiss = { showEditor = false }) { name, emoji, days, time, voice, startDate ->
+        if (showEditor) HabitEditor(editing, notifications && exact, onDismiss = { showEditor = false }) { name, emoji, days, time, voice, startDate, duration ->
             val previous = editing
-            save(if (previous == null) habits + Habit(name = name, emoji = emoji, created = startDate, days = days, reminder = time, voice = voice)
-                else habits.map { if (it.id == previous.id) it.copy(name = name, emoji = emoji, created = startDate, days = days, reminder = time, voice = voice) else it })
+            save(if (previous == null) habits + Habit(name = name, emoji = emoji, created = startDate, days = days, reminder = time, voice = voice, durationMinutes = duration)
+                else habits.map { if (it.id == previous.id) it.copy(name = name, emoji = emoji, created = startDate, days = days, reminder = time, voice = voice, durationMinutes = duration) else it })
             showEditor = false
             if (time != null && !notifications) message = "Habit saved. Open Settings to allow notifications so reminders can appear."
         }
@@ -264,7 +269,7 @@ private fun DayByDay(activity: MainActivity) {
             confirmButton = { TextButton(onClick = {
                 try {
                     val safe = next.map { it.copy(voice = false) }
-                    store.save(safe); ReminderScheduler.sync(activity, habits, safe); habits = safe; loadError = null; imported = null; message = "Backup restored."
+                    store.save(safe); FocusTimer(activity).clear(); ReminderScheduler.sync(activity, habits, safe); habits = safe; loadError = null; imported = null; message = "Backup restored."
                 } catch (_: Exception) { imported = null; message = "Could not restore backup." }
             }) { Text("Replace and restore") } }, dismissButton = { TextButton(onClick = { imported = null }) { Text("Cancel") } }) }
         message?.let { text -> AlertDialog(onDismissRequest = { message = null }, title = { Text("Day by Day") }, text = { Text(text) }, confirmButton = { TextButton(onClick = { message = null }) { Text("OK") } }) }
@@ -328,6 +333,7 @@ private fun WeekSelector(today: LocalDate, selected: LocalDate, choose: (LocalDa
 
 @Composable
 private fun HabitCard(h: Habit, selected: LocalDate, today: LocalDate, toggle: () -> Unit, edit: () -> Unit, delete: () -> Unit) {
+    val context = LocalContext.current
     SurfaceCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(48.dp).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), CircleShape), contentAlignment = Alignment.Center) { Text(h.emoji, fontSize = 25.sp) }
@@ -339,6 +345,11 @@ private fun HabitCard(h: Habit, selected: LocalDate, today: LocalDate, toggle: (
                 Text("Starts ${h.created.format(DateTimeFormatter.ofPattern("MMM d, yyyy"))}", fontSize = 10.sp)
             }
             Checkbox(checked = selected in h.completed, onCheckedChange = { toggle() }, enabled = h.scheduled(selected), modifier = Modifier.semantics { contentDescription = "Complete ${h.name} for $selected" })
+        }
+        if (h.durationMinutes > 0) {
+            OutlinedButton(onClick = { context.startActivity(Intent(context, TimerActivity::class.java).putExtra("habitId", h.id)) }, modifier = Modifier.fillMaxWidth()) {
+                Text("Start / open timer • ${h.durationMinutes / 60}h ${h.durationMinutes % 60}m")
+            }
         }
         Row { TextButton(onClick = edit) { Text("Edit") }; TextButton(onClick = delete) { Text("Delete") } }
     }
@@ -373,7 +384,7 @@ private fun SettingToggle(title: String, detail: String, checked: Boolean, chang
 }
 
 @Composable
-private fun HabitEditor(habit: Habit?, voiceAllowed: Boolean, onDismiss: () -> Unit, onSave: (String, String, Set<Int>, String?, Boolean, LocalDate) -> Unit) {
+private fun HabitEditor(habit: Habit?, voiceAllowed: Boolean, onDismiss: () -> Unit, onSave: (String, String, Set<Int>, String?, Boolean, LocalDate, Int) -> Unit) {
     var name by remember { mutableStateOf(habit?.name ?: "") }
     var emoji by remember { mutableStateOf(habit?.emoji ?: "🌱") }
     var days by remember { mutableStateOf(habit?.days ?: (1..7).toSet()) }
@@ -383,6 +394,12 @@ private fun HabitEditor(habit: Habit?, voiceAllowed: Boolean, onDismiss: () -> U
     var time by remember { mutableStateOf(habit?.reminder?.let(LocalTime::parse) ?: LocalTime.now().withSecond(0).withNano(0)) }
     val dateValid = habit?.completed?.none { it < startDate } ?: true
     var voice by remember { mutableStateOf(habit?.voice ?: false) }
+    var timed by remember { mutableStateOf((habit?.durationMinutes ?: 0) > 0) }
+    var durationHours by remember { mutableStateOf(((habit?.durationMinutes ?: 25) / 60).toString()) }
+    var durationMins by remember { mutableStateOf(((habit?.durationMinutes ?: 25) % 60).toString()) }
+    val h = durationHours.toIntOrNull() ?: -1
+    val m = durationMins.toIntOrNull() ?: -1
+    val durationValid = h in 0..24 && m in 0..59 && (h * 60 + m) in 1..1440
     AlertDialog(onDismissRequest = onDismiss, title = { Text(if (habit == null) "A fresh start" else "Edit your ritual") },
         text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             OutlinedTextField(value = name, onValueChange = { name = it.take(60) }, label = { Text("Habit name") }, singleLine = true)
@@ -409,6 +426,15 @@ private fun HabitEditor(habit: Habit?, voiceAllowed: Boolean, onDismiss: () -> U
                 }
             }
             if (days.isEmpty()) Text("Choose at least one day.", color = MaterialTheme.colorScheme.error)
+            SettingToggle("Focus timer", "Set how long you want to work", timed) { timed = it }
+            if (timed) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(durationHours, { durationHours = it.filter(Char::isDigit).take(2) }, label = { Text("Hours") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                    OutlinedTextField(durationMins, { durationMins = it.filter(Char::isDigit).take(2) }, label = { Text("Minutes") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                }
+                if (!durationValid) Text("Choose 1 minute to 24 hours. Minutes must be 0–59.", color = MaterialTheme.colorScheme.error)
+                Text("Tap Start on the habit or its reminder notification to begin. Completing the timer lets you check in; it never marks the habit automatically.", fontSize = 11.sp)
+            }
             SettingToggle("Reminder", "One reminder on scheduled days", reminder) { reminder = it }
             if (reminder) {
                 Text("Reminder time", fontWeight = FontWeight.Bold)
@@ -426,7 +452,7 @@ private fun HabitEditor(habit: Habit?, voiceAllowed: Boolean, onDismiss: () -> U
                 Text(if (voiceAllowed) "Voice reads this habit name aloud. Only enable it if that is OK in public." else "Enable notifications and precise reminders in Settings before turning on voice.", fontSize = 11.sp)
             }
         } },
-        confirmButton = { TextButton(enabled = name.isNotBlank() && days.isNotEmpty() && dateValid, onClick = {
-            onSave(name.trim(), emoji, days, if (reminder) time.format(DateTimeFormatter.ofPattern("HH:mm", java.util.Locale.ROOT)) else null, reminder && voice, startDate)
+        confirmButton = { TextButton(enabled = name.isNotBlank() && days.isNotEmpty() && dateValid && (!timed || durationValid), onClick = {
+            onSave(name.trim(), emoji, days, if (reminder) time.format(DateTimeFormatter.ofPattern("HH:mm", java.util.Locale.ROOT)) else null, reminder && voice, startDate, if (timed) h * 60 + m else 0)
         }) { Text("Save habit") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } })
 }
