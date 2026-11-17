@@ -92,9 +92,11 @@ class VoiceReminderService : Service(), TextToSpeech.OnInitListener {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         ReminderScheduler.channel(this)
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
-        startForeground(42, Notification.Builder(this, ReminderScheduler.CHANNEL).setSmallIcon(R.drawable.ic_notification)
+        getSystemService(NotificationManager::class.java).createNotificationChannel(
+            NotificationChannel("voice_status", "Voice reminder status", NotificationManager.IMPORTANCE_LOW))
+        startForeground(42, Notification.Builder(this, "voice_status").setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("Day by Day voice reminder").setContentText("Speaking your selected habit reminder")
-            .setContentIntent(open).setSilent(true).build())
+            .setContentIntent(open).setOnlyAlertOnce(true).build())
         taskName = intent?.getStringExtra("name") ?: "Your habit"
         val audio = getSystemService(AudioManager::class.java)
         if (ReminderScheduler.quiet(this) || getSystemService(NotificationManager::class.java).currentInterruptionFilter != NotificationManager.INTERRUPTION_FILTER_ALL || audio.ringerMode != AudioManager.RINGER_MODE_NORMAL || audio.isMusicActive) { stopSelf(); return START_NOT_STICKY }
