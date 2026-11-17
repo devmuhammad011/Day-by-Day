@@ -66,3 +66,8 @@ Speak when timer ends is opt-in in Settings. It announces completion once per co
 ## DailyStride 2.5 — First-open guide
 
 Five onboarding pages explain the dashboard, habit schedules and conflict prevention, focus timers / lock-screen access, voice / permissions, and progress / backups. Next, Back, Skip and Start my stride controls; content scrolls on smaller displays. The current page survives rotation, and completion is saved locally. The guide appears once for fresh installs (and once when upgrading from versions without it). Settings → Open app guide replays it without changing habits. It does not request permissions automatically. Illustrations are explanatory examples, not fake user statistics.
+
+
+## DailyStride 2.6 — Policy and support links
+
+Settings → About & support contains Privacy Policy, Terms of Use, Help & Support, the product website and Email Nova Stack. Web links open with Android's external browser; email opens the user's mail composer without sending a message. The links use the published `https://dayly-stride-website.vercel.app/` origin with `/privacy/`, `/terms/` and `/support/` paths. Missing handlers or blocked intents show an error and the address. No WebView, network SDK or Android internet permission was added. Website source remains in the separate DaylyStride-website repository.

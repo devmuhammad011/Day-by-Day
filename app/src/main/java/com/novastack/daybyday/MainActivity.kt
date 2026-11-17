@@ -90,6 +90,16 @@ private fun DayByDay(activity: MainActivity) {
     var deleting by remember { mutableStateOf<Habit?>(null) }
     var imported by remember { mutableStateOf<List<Habit>?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
+    fun openExternal(url: String, email: Boolean = false) {
+        try {
+            val action = if (email) Intent.ACTION_SENDTO else Intent.ACTION_VIEW
+            activity.startActivity(Intent(action, Uri.parse(url)))
+        } catch (_: android.content.ActivityNotFoundException) {
+            message = "No ${if (email) "email app" else "browser"} is available. Open this address on another device: $url"
+        } catch (_: SecurityException) {
+            message = "Your device blocked opening this address: $url"
+        }
+    }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { notifications = notificationsAllowed(activity) }
     fun save(next: List<Habit>) {
         try {
@@ -276,7 +286,18 @@ private fun DayByDay(activity: MainActivity) {
                         Text("Replay the guide to habits, schedules, focus timers, voice and backups.")
                         OutlinedButton(onClick = { guideComplete = false }) { Text("Open app guide") }
                     } }
-                    item { Text("DailyStride • Version 2.5\nSmall steps. Lasting change.", color = colors.primary, modifier = Modifier.padding(vertical = 16.dp)) }
+                    item { SurfaceCard {
+                        Text("About & support", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                        Text("DailyStride by Nova Stack", color = colors.primary)
+                        Text("These pages open in your browser and need an internet connection.", fontSize = 12.sp)
+                        OutlinedButton(onClick = { openExternal("https://dayly-stride-website.vercel.app/privacy/") }, modifier = Modifier.fillMaxWidth()) { Text("Privacy Policy ↗") }
+                        OutlinedButton(onClick = { openExternal("https://dayly-stride-website.vercel.app/terms/") }, modifier = Modifier.fillMaxWidth()) { Text("Terms of Use ↗") }
+                        OutlinedButton(onClick = { openExternal("https://dayly-stride-website.vercel.app/support/") }, modifier = Modifier.fillMaxWidth()) { Text("Help & Support ↗") }
+                        OutlinedButton(onClick = { openExternal("https://dayly-stride-website.vercel.app/") }, modifier = Modifier.fillMaxWidth()) { Text("Visit DailyStride website ↗") }
+                        TextButton(onClick = { openExternal("mailto:mumgloballink@gmail.com?subject=DailyStride%20support", email = true) }) { Text("Email Nova Stack") }
+                        Text("mumgloballink@gmail.com", fontSize = 12.sp)
+                    } }
+                    item { Text("DailyStride • Version 2.6\nSmall steps. Lasting change.", color = colors.primary, modifier = Modifier.padding(vertical = 16.dp)) }
                 }
             }
         }
