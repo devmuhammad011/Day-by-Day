@@ -67,6 +67,11 @@ class MainActivity : ComponentActivity() {
 private fun DayByDay(activity: MainActivity) {
     val store = remember { HabitStore(activity) }
     val prefs = remember { activity.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE) }
+    var guideComplete by remember { mutableStateOf(prefs.getBoolean("guideComplete", false)) }
+    if (!guideComplete) {
+        WelcomeGuide(onDone = { prefs.edit().putBoolean("guideComplete", true).apply(); guideComplete = true })
+        return
+    }
     var loadError by remember { mutableStateOf<String?>(null) }
     var habits by remember { mutableStateOf(try { store.load() } catch (_: Exception) { loadError = "Your saved habits could not be read. They have been left untouched. Restore a backup or restart the app."; emptyList() }) }
     var today by remember { mutableStateOf(LocalDate.now()) }
@@ -266,7 +271,12 @@ private fun DayByDay(activity: MainActivity) {
                         OutlinedButton(onClick = { restore.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) }) { Text("Restore backup") }
                         Text("Restoring replaces your current habits after confirmation. Export a backup first.", fontSize = 12.sp)
                     } }
-                    item { Text("DailyStride • Version 2.4\nSmall steps. Lasting change.", color = colors.primary, modifier = Modifier.padding(vertical = 16.dp)) }
+                    item { SurfaceCard {
+                        Text("Need a quick tour?", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                        Text("Replay the guide to habits, schedules, focus timers, voice and backups.")
+                        OutlinedButton(onClick = { guideComplete = false }) { Text("Open app guide") }
+                    } }
+                    item { Text("DailyStride • Version 2.5\nSmall steps. Lasting change.", color = colors.primary, modifier = Modifier.padding(vertical = 16.dp)) }
                 }
             }
         }
