@@ -14,7 +14,8 @@ data class Habit(
     val days: Set<Int> = (1..7).toSet(),
     val reminder: String? = null,
     val voice: Boolean = false,
-    val durationMinutes: Int = 0
+    val durationMinutes: Int = 0,
+    val plannedStart: String? = null
 ) {
     fun scheduled(date: LocalDate) = date >= created && date.dayOfWeek.value in days
     fun streak(today: LocalDate): Int {

@@ -18,18 +18,21 @@ class HabitStore(context: Context) {
     fun save(habits: List<Habit>) {
         check(prefs.edit().putString("items", encode(habits).toString()).commit()) { "Could not save habits. Please try again." }
     }
-    fun export(habits: List<Habit>): String = JSONObject().put("app", "DayByDay").put("version", 3).put("habits", encode(habits)).toString(2)
+    fun export(habits: List<Habit>): String = JSONObject().put("app", "DayByDay").put("version", 4).put("habits", encode(habits)).toString(2)
     fun importBackup(raw: String): List<Habit> {
         require(raw.toByteArray().size <= 1_048_576) { "Backup is larger than 1 MB." }
         val obj = JSONObject(raw)
-        require(obj.optString("app") == "DayByDay" && obj.getInt("version") in 1..3) { "Not a supported Day by Day backup." }
-        return decodeArray(obj.getJSONArray("habits"))
+        require(obj.optString("app") == "DayByDay" && obj.getInt("version") in 1..4) { "Not a supported Day by Day backup." }
+        val habits = decodeArray(obj.getJSONArray("habits"))
+        val clash = ScheduleConflict.firstIn(habits)
+        require(clash == null) { "Backup contains overlapping schedules involving ${clash?.habit?.name}. Resolve those times in the original app and export again." }
+        return habits
     }
     private fun encode(habits: List<Habit>) = JSONArray().apply {
         habits.forEach { h -> put(JSONObject().apply {
             put("id", h.id); put("name", h.name); put("emoji", h.emoji); put("created", h.created.toString())
             put("completed", JSONArray(h.completed.sorted().map { it.toString() })); put("days", JSONArray(h.days.sorted()))
-            put("reminder", h.reminder ?: JSONObject.NULL); put("voice", h.voice); put("durationMinutes", h.durationMinutes)
+            put("reminder", h.reminder ?: JSONObject.NULL); put("voice", h.voice); put("durationMinutes", h.durationMinutes); put("plannedStart", h.plannedStart ?: JSONObject.NULL)
         }) }
     }
     private fun decodeArray(array: JSONArray): List<Habit> {
@@ -50,7 +53,9 @@ class HabitStore(context: Context) {
             if (reminder != null) LocalTime.parse(reminder)
             val duration = o.optInt("durationMinutes", 0)
             require(duration in 0..1440) { "Duration must be between 1 minute and 24 hours, or disabled." }
-            Habit(id, name, emoji, created, completed, days, reminder, o.optBoolean("voice", false), duration)
+            val plannedStart = if (o.isNull("plannedStart")) null else o.getString("plannedStart")
+            if (plannedStart != null) LocalTime.parse(plannedStart)
+            Habit(id, name, emoji, created, completed, days, reminder, o.optBoolean("voice", false), duration, plannedStart)
         }
         require(result.map { it.id }.distinct().size == result.size) { "Duplicate habit IDs." }
         return result

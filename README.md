@@ -47,3 +47,10 @@ Optional per-habit duration (1 minute to 24 hours), Start action alongside the 1
 The countdown uses Android's monotonic elapsed clock (including sleep), persisted state, a system notification chronometer and an AlarmManager completion alarm; it does not rely on a continuously running app or foreground service. Exact-alarm permission improves completion alert timing; otherwise the alert can be delayed. Displayed milliseconds are visual progress, not precision timing guarantees. After reboot, the session pauses using a bounded wall-clock estimate; force-stop prevents alerts until the app is reopened. Timer state is not part of backups; habit durations are. Old backup formats 1 and 2 remain readable.
 
 Before installing another debug build, export your habits: the temporary signing key still changes between builds and an uninstall may be needed, which clears local data.
+
+
+## DailyStride 2.3
+
+Renamed the visible app to DailyStride, “Small steps. Lasting change.” Application ID remains `com.novastack.daybyday`; backup app identifier remains `DayByDay` for compatibility.
+
+Optional planned work start is separate from reminder time. When no planned start is specified, a reminder anchors the focus duration. Weekly overlap checking rejects intersecting work intervals, duplicate instantaneous reminders, or reminder instants inside another task's work interval. Checks include creation dates, weekday recurrence, future schedules, different AM/PM times and midnight/week-boundary spillover. Exact end-to-start adjacency is allowed. No-duration habits occupy a point, not a whole interval. Unscheduled habits do not reserve time. Existing conflicts are preserved and surfaced for editing; conflicting backups are rejected before any replacement. A single focus timer still runs at a time. Checks use device local civil time; daylight-saving transitions can affect actual elapsed work duration.

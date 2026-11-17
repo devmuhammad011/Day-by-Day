@@ -9,8 +9,8 @@ android {
         applicationId = "com.novastack.daybyday"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
-        versionName = "2.2"
+        versionCode = 5
+        versionName = "2.3"
     }
     buildFeatures { compose = true }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }

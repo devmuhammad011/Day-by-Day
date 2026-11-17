@@ -76,7 +76,7 @@ class ReminderReceiver : BroadcastReceiver() {
             Intent(context, TimerActivity::class.java).setData(Uri.parse("daybyday://timer/${Uri.encode(habit.id)}")).putExtra("habitId", habit.id),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val builder = Notification.Builder(context, ReminderScheduler.CHANNEL).setSmallIcon(com.novastack.daybyday.R.drawable.ic_notification)
-            .setContentTitle(habit.name).setContentText("Time for a small step. Open Day by Day to check in.")
+            .setContentTitle(habit.name).setContentText("Time for a small step. Open DailyStride to check in.")
             .setContentIntent(open).setAutoCancel(true).addAction(Notification.Action.Builder(null, "Remind in 10 min", snooze).build())
         if (habit.durationMinutes > 0) builder.addAction(Notification.Action.Builder(null, "Start", start).build())
         val notification = builder.build()
@@ -100,7 +100,7 @@ class VoiceReminderService : Service(), TextToSpeech.OnInitListener {
         getSystemService(NotificationManager::class.java).createNotificationChannel(
             NotificationChannel("voice_status", "Voice reminder status", NotificationManager.IMPORTANCE_LOW))
         startForeground(42, Notification.Builder(this, "voice_status").setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle("Day by Day voice reminder").setContentText("Speaking your selected habit reminder")
+            .setContentTitle("DailyStride voice reminder").setContentText("Speaking your selected habit reminder")
             .setContentIntent(open).setOnlyAlertOnce(true).build())
         taskName = intent?.getStringExtra("name") ?: "Your habit"
         val audio = getSystemService(AudioManager::class.java)
