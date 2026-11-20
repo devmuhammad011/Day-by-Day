@@ -76,3 +76,10 @@ Settings → About & support contains Privacy Policy, Terms of Use, Help & Suppo
 ## DailyStride 2.7 — Automatic focus check-in
 
 A running countdown reaching zero now saves its habit completion automatically, including from the background completion alarm or when the expired session is reopened. The stored session start date identifies the correct day for overnight sessions. Pause and reset do not award check-ins; a session restored paused after reboot requires review. Completion is idempotent, so another finish callback or another full session cannot toggle a checked habit off. Deleted or no-longer-scheduled habits are left untouched; save failures show a retry action. The dashboard observes stored check-ins so its tick, totals and streaks refresh immediately. These automatic completions implement user consent given when starting the timer, including while locked; manual retry still requires unlocking.
+
+
+## DailyStride 2.8 — Navy / cyan presentation
+
+Redesigned the app presentation around the supplied reference: navy backgrounds, cyan completion ring, emerald streak panel and checkboxes, selectable seven-day history bars, compact task cards and a round add button. Bottom navigation now has Today, Progress and Settings; All tasks remains available from Today and the header menu to manage future/rest-day habits. Each task has an accessible three-dot dropdown containing Edit and Delete, with the existing delete confirmation. Focus timers remain available on timed tasks. The progress screen, settings, timer screen and onboarding use the updated palette; the light theme is retained.
+
+Habit storage, schedule conflict checks, automatic timer completion, notifications, voice, backups, package ID and legal URLs are unchanged. Summary values are computed from actual habits; the streak card shows the best current habit streak. On small screens or enlarged text the summary stacks vertically. Android XML and compilation are checked; device visual/touch validation remains necessary.

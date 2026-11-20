@@ -13,6 +13,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -34,6 +37,9 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
@@ -47,12 +53,12 @@ import kotlinx.coroutines.delay
 import java.time.*
 import java.time.format.DateTimeFormatter
 
-private val Forest = Color(0xFF082E27)
-private val CardGreen = Color(0xFF163F36)
-private val Mint = Color(0xFF77D9B0)
-private val Gold = Color(0xFFF1C66D)
-private val Lilac = Color(0xFFB59BE8)
-private val Muted = Color(0xFFB2CBC1)
+private val Forest = Color(0xFF061B2A)
+private val CardGreen = Color(0xFF112E42)
+private val Mint = Color(0xFF00DDD7)
+private val Gold = Color(0xFF00E89C)
+private val Lilac = Color(0xFF19B691)
+private val Muted = Color(0xFFADC6D7)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -77,6 +83,8 @@ private fun DayByDay(activity: MainActivity) {
     var today by remember { mutableStateOf(LocalDate.now()) }
     var selected by remember { mutableStateOf(today) }
     var tab by remember { mutableStateOf(0) }
+    var headerMenu by remember { mutableStateOf(false) }
+    var showAllTasks by remember { mutableStateOf(false) }
     var dark by remember { mutableStateOf(prefs.getBoolean("dark", true)) }
     var quiet by remember { mutableStateOf(prefs.getBoolean("quiet", false)) }
     var hausa by remember { mutableStateOf(prefs.getBoolean("hausaVoice", false)) }
@@ -162,73 +170,71 @@ private fun DayByDay(activity: MainActivity) {
     LaunchedEffect(Unit) { while (true) { refresh(); delay(30_000) } }
     val existingConflict = remember(habits, today) { ScheduleConflict.firstIn(habits, today) }
     val colors = if (dark) darkColorScheme(primary = Mint, secondary = Gold, background = Forest, surface = CardGreen, onBackground = Color.White, onSurface = Color.White)
-        else lightColorScheme(primary = Color(0xFF286347), secondary = Color(0xFF8F6815), background = Color(0xFFF4F7F1), surface = Color.White)
+        else lightColorScheme(primary = Color(0xFF007F85), secondary = Color(0xFF007D55), background = Color(0xFFF1F8FC), surface = Color.White)
     MaterialTheme(colorScheme = colors) {
         Scaffold(containerColor = colors.background,
             topBar = { TopAppBar(title = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(painterResource(R.drawable.ic_sprout), contentDescription = "DailyStride logo", tint = colors.primary, modifier = Modifier.size(32.dp))
-                    Spacer(Modifier.width(10.dp)); Text("DailyStride", fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                    Icon(painterResource(R.drawable.ic_sprout), contentDescription = "DailyStride logo", tint = colors.primary, modifier = Modifier.size(38.dp))
+                    Spacer(Modifier.width(8.dp)); Text("DailyStride", fontSize = 25.sp, fontWeight = FontWeight.Bold)
                 }
             }, colors = TopAppBarDefaults.topAppBarColors(containerColor = colors.background), actions = {
-                TextButton(onClick = { tab = 3 }) { Text(if (notifications) "Reminders ✓" else "Reminders !", fontSize = 12.sp) }
+                Box {
+                    IconButton(onClick = { headerMenu = true }, modifier = Modifier.semantics { contentDescription = "More options" }) { Text("⋮", fontSize = 30.sp) }
+                    DropdownMenu(expanded = headerMenu, onDismissRequest = { headerMenu = false }) {
+                        DropdownMenuItem(text = { Text(if (showAllTasks) "Show selected day" else "Show all tasks") }, onClick = { showAllTasks = !showAllTasks; tab = 0; headerMenu = false })
+                        DropdownMenuItem(text = { Text("Progress") }, onClick = { tab = 1; headerMenu = false })
+                        DropdownMenuItem(text = { Text("Settings & reminders") }, onClick = { tab = 2; headerMenu = false })
+                    }
+                }
             }) },
             bottomBar = {
-                NavigationBar(containerColor = colors.background, tonalElevation = 0.dp) {
-                    listOf("Home" to "⌂", "Habits" to "✓", "Progress" to "▥", "Settings" to "⚙").forEachIndexed { i, (label, symbol) ->
-                        NavigationBarItem(selected = tab == i, onClick = { tab = i }, icon = { Text(symbol, fontSize = 23.sp) }, label = { Text(label) })
+                Surface(color = colors.background, shadowElevation = 5.dp) {
+                    Row(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 20.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        listOf("Today" to R.drawable.ic_nav_today, "Progress" to R.drawable.ic_nav_progress, "Settings" to R.drawable.ic_nav_settings).forEachIndexed { i, (label, icon) ->
+                            val active = tab == i
+                            Column(Modifier.weight(1f).background(if (active) colors.primary.copy(alpha = 0.15f) else Color.Transparent, RoundedCornerShape(24.dp))
+                                .selectable(selected = active, onClick = { tab = i }, role = Role.Tab).padding(vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Icon(painterResource(icon), contentDescription = null, tint = if (active) colors.primary else colors.onBackground.copy(alpha = 0.8f), modifier = Modifier.size(26.dp))
+                                Text(label, color = if (active) colors.primary else colors.onBackground.copy(alpha = 0.8f), fontSize = 14.sp, fontWeight = if (active) FontWeight.Bold else FontWeight.Medium)
+                            }
+                        }
                     }
                 }
             }, floatingActionButton = {
-                if (tab < 2 && loadError == null) FloatingActionButton(onClick = { editing = null; showEditor = true }, containerColor = colors.primary) { Text("+", fontSize = 30.sp) }
+                if (tab == 0 && loadError == null) FloatingActionButton(onClick = { editing = null; showEditor = true }, containerColor = colors.primary, contentColor = Forest, shape = CircleShape, modifier = Modifier.size(64.dp).semantics { contentDescription = "Add task" }) { Text("+", fontSize = 40.sp) }
             }
         ) { padding ->
-            LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 90.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 90.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 existingConflict?.let { clash -> item { SurfaceCard {
                     Text("Review overlapping schedules", fontWeight = FontWeight.Bold)
                     Text("An existing schedule overlaps ${clash.habit.name}. Edit its work time, reminder or weekdays to resolve it. Your history is unchanged.")
                 } } }
                 loadError?.let { error -> item { SurfaceCard { Text(error); Text("Use Settings → Restore backup.") } } }
-                if (tab == 0 || tab == 1) {
+                if (tab == 0) {
                     item {
-                        Text(today.format(DateTimeFormatter.ofPattern("EEEE, MMMM d")), color = colors.primary, fontSize = 13.sp)
-                        Spacer(Modifier.height(6.dp))
-                        Text(if (tab == 0) "Small steps.\nA stronger you." else "Your daily rituals", fontSize = 32.sp, lineHeight = 38.sp, fontWeight = FontWeight.Bold)
+                        Text(selected.format(DateTimeFormatter.ofPattern("EEEE, MMM d")), fontSize = 30.sp, lineHeight = 36.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp, bottom = 12.dp))
                     }
-                    if (tab == 0) {
-                        item { DailyOverview(habits, today) }
-                        item {
-                            val next = habits.mapNotNull { h -> h.nextReminder(LocalDateTime.now())?.let { h to it } }.minByOrNull { it.second }
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                SurfaceCard(Modifier.weight(1f)) {
-                                    Text("BEST CURRENT STREAK", fontSize = 10.sp, color = colors.primary)
-                                    Text("${habits.maxOfOrNull { it.streak(today) } ?: 0} days", fontSize = 27.sp, fontWeight = FontWeight.Bold)
-                                    Text("Scheduled days count", fontSize = 11.sp)
-                                }
-                                SurfaceCard(Modifier.weight(1f)) {
-                                    Text("UP NEXT", fontSize = 10.sp, color = colors.primary)
-                                    Text(next?.second?.format(DateTimeFormatter.ofPattern("h:mm a")) ?: "Your pace", fontSize = 23.sp, fontWeight = FontWeight.Bold)
-                                    Text(next?.first?.name ?: "Add a reminder", fontSize = 12.sp, maxLines = 2)
-                                    if (next != null) Text(next.second.format(DateTimeFormatter.ofPattern("EEE, MMM d")), fontSize = 10.sp)
-                                }
-                            }
-                        }
-                    }
-                    item { WeekSelector(today, selected) { selected = it } }
+                    item { DailyOverview(habits, selected, today) }
+                    item { WeekSelector(habits, today, selected) { selected = it; showAllTasks = false } }
                     item {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                            Text(if (selected == today) "Today's habits" else selected.format(DateTimeFormatter.ofPattern("MMM d")), fontSize = 21.sp, fontWeight = FontWeight.Bold)
-                            TextButton(onClick = { editing = null; showEditor = true }, enabled = loadError == null) { Text("+ Add habit") }
+                            Text(if (showAllTasks) "All tasks" else if (selected == today) "Today's tasks" else "Tasks for ${selected.format(DateTimeFormatter.ofPattern("MMM d"))}", fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                            TextButton(onClick = { showAllTasks = !showAllTasks }) { Text(if (showAllTasks) "Selected day" else "All tasks", fontSize = 12.sp) }
                         }
                     }
-                    val visible = if (tab == 1) habits else habits.filter { it.scheduled(selected) }
-                    if (visible.isEmpty()) item { SurfaceCard { Text(if (habits.isEmpty()) "Start with one small habit." else "A little breathing room.", fontWeight = FontWeight.Bold); Text("No habits scheduled for this day. You can add one or choose another date.") } }
+                    val visible = if (showAllTasks) habits else habits.filter { it.scheduled(selected) }
+                    if (visible.isEmpty()) item { SurfaceCard { Text(if (habits.isEmpty()) "Your first small step starts here." else "A little breathing room.", fontWeight = FontWeight.Bold); Text("No tasks scheduled for this day. Tap + to add one, or choose All tasks to manage your full list.") } }
                     items(visible, key = { it.id }) { habit ->
                         HabitCard(habit, selected, today, toggle = { save(habits.map { if (it.id == habit.id) it.toggle(selected) else it }) },
                             edit = { editing = habit; showEditor = true }, delete = { deleting = habit })
                     }
+                    item {
+                        val next = habits.mapNotNull { h -> h.nextReminder(LocalDateTime.now())?.let { h to it } }.minByOrNull { it.second }
+                        if (next != null) Text("Next reminder: ${next.first.name} • ${next.second.format(DateTimeFormatter.ofPattern("EEE, h:mm a"))}", color = colors.onBackground.copy(alpha = 0.7f), fontSize = 12.sp, modifier = Modifier.padding(top = 10.dp))
+                    }
                 }
-                if (tab == 2) {
+                if (tab == 1) {
                     item { Text("Your growth", fontSize = 32.sp, fontWeight = FontWeight.Bold); Text("Consistency is more than a streak.") }
                     item { DailyOverview(habits, today) }
                     item { WeeklyChart(habits, today) }
@@ -250,10 +256,10 @@ private fun DayByDay(activity: MainActivity) {
                         }
                     } }
                 }
-                if (tab == 3) {
+                if (tab == 2) {
                     item { Text("Make it yours", fontSize = 32.sp, fontWeight = FontWeight.Bold) }
                     item { SurfaceCard {
-                        SettingToggle("Dark forest theme", "Switch between forest and cream", dark) { dark = it; prefs.edit().putBoolean("dark", it).apply() }
+                        SettingToggle("Dark ocean theme", "Switch between navy and daylight", dark) { dark = it; prefs.edit().putBoolean("dark", it).apply() }
                     } }
                     item { SurfaceCard {
                         Text("Reminders & voice", fontSize = 20.sp, fontWeight = FontWeight.Bold)
@@ -306,7 +312,7 @@ private fun DayByDay(activity: MainActivity) {
                         TextButton(onClick = { openExternal("mailto:mumgloballink@gmail.com?subject=DailyStride%20support", email = true) }) { Text("Email Nova Stack") }
                         Text("mumgloballink@gmail.com", fontSize = 12.sp)
                     } }
-                    item { Text("DailyStride • Version 2.7\nSmall steps. Lasting change.", color = colors.primary, modifier = Modifier.padding(vertical = 16.dp)) }
+                    item { Text("DailyStride • Version 2.8\nSmall steps. Lasting change.", color = colors.primary, modifier = Modifier.padding(vertical = 16.dp)) }
                 }
             }
         }
@@ -336,51 +342,85 @@ private fun notificationsAllowed(activity: MainActivity): Boolean = activity.get
 
 @Composable
 private fun SurfaceCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-    Card(modifier.fillMaxWidth(), shape = RoundedCornerShape(26.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+    Card(modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp), content = content)
     }
 }
 
 @Composable
-private fun DailyOverview(habits: List<Habit>, today: LocalDate) {
+private fun CompletionRing(complete: Int, total: Int, diameter: Dp) {
+    val progress = if (total == 0) 0f else complete.toFloat() / total
+    val colors = MaterialTheme.colorScheme
+    val track = colors.primary.copy(alpha = 0.24f)
+    Box(Modifier.size(diameter).semantics { contentDescription = "$complete of $total tasks completed, ${(progress * 100).toInt()} percent" }, contentAlignment = Alignment.Center) {
+        Canvas(Modifier.fillMaxSize()) {
+            val stroke = 15.dp.toPx(); val inset = stroke / 2
+            val bounds = Size(size.width - stroke, size.height - stroke)
+            drawArc(track, 0f, 360f, false, Offset(inset, inset), bounds, style = Stroke(stroke))
+            if (progress > 0) drawArc(colors.primary, -90f, progress * 360f, false, Offset(inset, inset), bounds, style = Stroke(stroke, cap = StrokeCap.Round))
+        }
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("${(progress * 100).toInt()}%", fontSize = if (LocalDensity.current.fontScale > 1.3f) 30.sp else (diameter.value * 0.27f).sp, fontWeight = FontWeight.Bold)
+            Text("$complete of $total", fontSize = 15.sp, color = colors.onBackground.copy(alpha = 0.85f))
+        }
+    }
+}
+
+@Composable
+private fun StreakSummary(streak: Int, modifier: Modifier = Modifier) {
+    val colors = MaterialTheme.colorScheme
+    Surface(modifier, color = colors.secondary.copy(alpha = 0.16f), shape = RoundedCornerShape(20.dp)) {
+        Column(Modifier.padding(horizontal = 10.dp, vertical = 20.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            Icon(painterResource(R.drawable.ic_streak), contentDescription = null, tint = colors.secondary, modifier = Modifier.size(38.dp))
+            Text("$streak days", fontSize = 25.sp, fontWeight = FontWeight.Bold)
+            Text("current streak", fontSize = 13.sp, color = colors.onBackground.copy(alpha = 0.8f))
+            Text("Best habit", fontSize = 10.sp, color = colors.onBackground.copy(alpha = 0.6f))
+        }
+    }
+}
+
+@Composable
+private fun DailyOverview(habits: List<Habit>, today: LocalDate, streakDate: LocalDate = today) {
     val due = habits.filter { it.scheduled(today) }
     val complete = due.count { today in it.completed }
-    val progress = if (due.isEmpty()) 0f else complete.toFloat() / due.size
-    SurfaceCard {
-        Text("TODAY'S MOMENTUM", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(22.dp)) {
-            Box(Modifier.size(128.dp).semantics { contentDescription = "$complete of ${due.size} habits complete today" }, contentAlignment = Alignment.Center) {
-                val track = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
-                Canvas(Modifier.fillMaxSize()) {
-                    val stroke = 13.dp.toPx(); val inset = stroke / 2
-                    val bounds = Size(size.width - stroke, size.height - stroke)
-                    drawArc(track, 0f, 360f, false, Offset(inset, inset), bounds, style = Stroke(stroke))
-                    if (progress > 0f) drawArc(Mint, -90f, progress * 360f, false, Offset(inset, inset), bounds, style = Stroke(stroke, cap = StrokeCap.Round))
-                }
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("${(progress * 100).toInt()}%", fontSize = 29.sp, fontWeight = FontWeight.Bold)
-                    Text("complete", fontSize = 11.sp)
-                }
+    val streak = habits.maxOfOrNull { it.streak(streakDate) } ?: 0
+    val dividerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+    BoxWithConstraints(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+        if (maxWidth < 280.dp || LocalDensity.current.fontScale > 1.3f) {
+            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                CompletionRing(complete, due.size, 184.dp)
+                StreakSummary(streak, Modifier.fillMaxWidth())
             }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("$complete / ${due.size}", fontSize = 30.sp, fontWeight = FontWeight.Bold)
-                Text("habits checked in", fontSize = 12.sp)
-                Text(if (due.isNotEmpty() && complete == due.size) "You showed up. Well done." else "One small step is enough to begin.", color = MaterialTheme.colorScheme.primary, fontSize = 12.sp)
+        } else {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                CompletionRing(complete, due.size, (maxWidth * 0.48f).coerceAtMost(190.dp))
+                Spacer(Modifier.width(14.dp))
+                Box(Modifier.width(1.dp).height(130.dp).background(dividerColor))
+                Spacer(Modifier.width(14.dp))
+                StreakSummary(streak, Modifier.weight(1f))
             }
         }
     }
 }
 
 @Composable
-private fun WeekSelector(today: LocalDate, selected: LocalDate, choose: (LocalDate) -> Unit) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+private fun WeekSelector(habits: List<Habit>, today: LocalDate, selected: LocalDate, choose: (LocalDate) -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    Row(Modifier.fillMaxWidth().padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
         (6L downTo 0L).forEach { n ->
-            val d = today.minusDays(n); val active = d == selected
-            Column(Modifier.weight(1f).background(if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface, RoundedCornerShape(18.dp))
-                .clickable { choose(d) }.padding(vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                val color = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
-                Text(d.format(DateTimeFormatter.ofPattern("EE")), color = color, fontSize = 10.sp)
-                Text("${d.dayOfMonth}", color = color, fontSize = 17.sp, fontWeight = FontWeight.Bold)
+            val date = today.minusDays(n); val active = date == selected
+            val due = habits.count { it.scheduled(date) }
+            val done = habits.count { it.scheduled(date) && date in it.completed }
+            val ratio = if (due == 0) 0f else done.toFloat() / due
+            Column(Modifier.weight(1f).background(if (active) colors.primary.copy(alpha = 0.08f) else Color.Transparent, RoundedCornerShape(12.dp))
+                .selectable(active, onClick = { choose(date) }, role = Role.Tab)
+                .semantics { contentDescription = "$date, $done of $due tasks completed" }
+                .padding(vertical = 10.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Box(Modifier.height(42.dp).fillMaxWidth(), contentAlignment = Alignment.BottomCenter) {
+                    Box(Modifier.width(24.dp).height((5 + 37 * ratio).dp).background(if (done == 0) colors.primary.copy(alpha = 0.3f) else if (active) colors.secondary else colors.secondary.copy(alpha = 0.75f), RoundedCornerShape(4.dp)))
+                }
+                Text(date.format(DateTimeFormatter.ofPattern("EEE")), fontSize = 11.sp, color = colors.onBackground.copy(alpha = if (active) 1f else 0.7f))
+                Text("${date.dayOfMonth}", fontSize = 16.sp, color = if (active) colors.primary else colors.onBackground.copy(alpha = 0.75f), fontWeight = if (active) FontWeight.Bold else FontWeight.Normal)
             }
         }
     }
@@ -389,25 +429,38 @@ private fun WeekSelector(today: LocalDate, selected: LocalDate, choose: (LocalDa
 @Composable
 private fun HabitCard(h: Habit, selected: LocalDate, today: LocalDate, toggle: () -> Unit, edit: () -> Unit, delete: () -> Unit) {
     val context = LocalContext.current
-    SurfaceCard {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(48.dp).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), CircleShape), contentAlignment = Alignment.Center) { Text(h.emoji, fontSize = 25.sp) }
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(h.name, fontWeight = FontWeight.Bold, fontSize = 17.sp)
-                Text("${h.streak(today)} day streak${h.reminder?.let { " • ${LocalTime.parse(it).format(DateTimeFormatter.ofPattern("h:mm a", java.util.Locale.ENGLISH))}" } ?: ""}${if (h.voice) " • Voice" else ""}", color = MaterialTheme.colorScheme.primary, fontSize = 11.sp)
-                Text(if (h.days.size == 7) "Every day" else h.days.sorted().joinToString(" · ") { DayOfWeek.of(it).name.take(3) }, fontSize = 10.sp)
-                h.plannedStart?.let { start -> Text("Work ${LocalTime.parse(start).format(DateTimeFormatter.ofPattern("h:mm a", java.util.Locale.ENGLISH))}${if (h.durationMinutes > 0) " – ${LocalTime.parse(start).plusMinutes(h.durationMinutes.toLong()).format(DateTimeFormatter.ofPattern("h:mm a", java.util.Locale.ENGLISH))}" else ""}", fontSize = 11.sp) }
-                Text("Starts ${h.created.format(DateTimeFormatter.ofPattern("MMM d, yyyy"))}", fontSize = 10.sp)
+    val colors = MaterialTheme.colorScheme
+    var menu by remember(h.id) { mutableStateOf(false) }
+    val timeFormat = DateTimeFormatter.ofPattern("h:mm a", java.util.Locale.ENGLISH)
+    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, colors.primary.copy(alpha = 0.13f)), colors = CardDefaults.cardColors(containerColor = colors.surface)) {
+        Column(Modifier.padding(horizontal = 8.dp, vertical = 6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(checked = selected in h.completed, onCheckedChange = { toggle() }, enabled = h.scheduled(selected),
+                    colors = CheckboxDefaults.colors(checkedColor = colors.secondary, checkmarkColor = colors.background, uncheckedColor = colors.onSurface.copy(alpha = 0.75f)),
+                    modifier = Modifier.semantics { contentDescription = "Complete ${h.name} for $selected" })
+                Column(Modifier.weight(1f).padding(vertical = 7.dp)) {
+                    Text(h.name, fontWeight = FontWeight.SemiBold, fontSize = 18.sp, lineHeight = 23.sp)
+                    val details = buildList {
+                        if (!h.scheduled(selected)) add("Not scheduled on this day")
+                        (h.plannedStart ?: h.reminder)?.let { add(LocalTime.parse(it).format(timeFormat)) }
+                        if (h.voice) add("Voice reminder")
+                    }
+                    if (details.isNotEmpty()) Text(details.joinToString(" • "), fontSize = 11.sp, color = colors.onSurface.copy(alpha = 0.65f))
+                }
+                Box {
+                    IconButton(onClick = { menu = true }, modifier = Modifier.semantics { contentDescription = "Options for ${h.name}" }) { Text("⋮", fontSize = 27.sp, color = colors.onSurface.copy(alpha = 0.8f)) }
+                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                        DropdownMenuItem(text = { Text("Edit") }, onClick = { menu = false; edit() })
+                        DropdownMenuItem(text = { Text("Delete", color = colors.error) }, onClick = { menu = false; delete() })
+                    }
+                }
             }
-            Checkbox(checked = selected in h.completed, onCheckedChange = { toggle() }, enabled = h.scheduled(selected), modifier = Modifier.semantics { contentDescription = "Complete ${h.name} for $selected" })
-        }
-        if (h.durationMinutes > 0) {
-            OutlinedButton(onClick = { context.startActivity(Intent(context, TimerActivity::class.java).putExtra("habitId", h.id)) }, modifier = Modifier.fillMaxWidth()) {
-                Text("Start / open timer • ${h.durationMinutes / 60}h ${h.durationMinutes % 60}m")
+            if (h.durationMinutes > 0) {
+                TextButton(onClick = { context.startActivity(Intent(context, TimerActivity::class.java).putExtra("habitId", h.id)) }, modifier = Modifier.padding(start = 44.dp)) {
+                    Text("▶  Start / open timer · ${h.durationMinutes / 60}h ${h.durationMinutes % 60}m", fontSize = 12.sp)
+                }
             }
         }
-        Row { TextButton(onClick = edit) { Text("Edit") }; TextButton(onClick = delete) { Text("Delete") } }
     }
 }
 

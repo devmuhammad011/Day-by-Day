@@ -2,7 +2,7 @@
     <style name="Theme.DayByDay" parent="android:style/Theme.Material.Light.NoActionBar">
         <item name="android:fontFamily">sans</item>
         <item name="android:windowLightStatusBar">false</item>
-        <item name="android:statusBarColor">#082E27</item>
-        <item name="android:navigationBarColor">#082E27</item>
+        <item name="android:statusBarColor">#061B2A</item>
+        <item name="android:navigationBarColor">#061B2A</item>
     </style>
 </resources>

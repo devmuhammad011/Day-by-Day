@@ -50,7 +50,7 @@ class TimerActivity : ComponentActivity() {
             else if (existing.habitId != requested.id) replacement = true
         }
         setContent {
-            MaterialTheme(colorScheme = darkColorScheme(primary = Color(0xFF77D9B0), background = Color(0xFF082E27), surface = Color(0xFF163F36))) {
+            MaterialTheme(colorScheme = darkColorScheme(primary = Color(0xFF00DDD7), background = Color(0xFF061B2A), surface = Color(0xFF112E42))) {
                 var replace by remember { mutableStateOf(replacement) }
                 if (replace && requested != null) AlertDialog(onDismissRequest = { replace = false }, title = { Text("Replace your active timer?") },
                     text = { Text("Only one focus timer runs at a time. Starting ${requested.name} will discard the current session.") },
@@ -114,20 +114,20 @@ private fun TimerScreen(timer: FocusTimer, onBack: () -> Unit, onComplete: () ->
             Text("FOCUS SESSION", color = MaterialTheme.colorScheme.primary, letterSpacing = 3.sp, fontSize = 12.sp)
             Text(s?.name ?: "No timer selected", fontSize = 28.sp, fontWeight = FontWeight.Bold)
             if (s != null) {
-                Text("SET DURATION  ${timeText(s.totalMs)}", color = Color(0xFFB2CBC1), fontSize = 13.sp)
+                Text("SET DURATION  ${timeText(s.totalMs)}", color = Color(0xFFADC6D7), fontSize = 13.sp)
                 Box(Modifier.fillMaxWidth().aspectRatio(1f).semantics { contentDescription = "Remaining ${timeText(remaining)}" }, contentAlignment = Alignment.Center) {
                     val ratio = (remaining.toFloat() / s.totalMs.coerceAtLeast(1)).coerceIn(0f, 1f)
                     Canvas(Modifier.fillMaxSize().padding(8.dp)) {
                         val width = 12.dp.toPx(); val offset = Offset(width / 2, width / 2); val bounds = Size(size.width - width, size.height - width)
-                        drawArc(Color(0xFF245248), -90f, 360f, false, offset, bounds, style = Stroke(width))
-                        drawArc(Color(0xFF77D9B0), -90f, ratio * 360, false, offset, bounds, style = Stroke(width, cap = StrokeCap.Round))
+                        drawArc(Color(0xFF1B4D69), -90f, 360f, false, offset, bounds, style = Stroke(width))
+                        drawArc(Color(0xFF00DDD7), -90f, ratio * 360, false, offset, bounds, style = Stroke(width, cap = StrokeCap.Round))
                     }
                     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text(timeText(remaining), fontSize = 36.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
                         Text(if (remaining == 0L) "SESSION COMPLETE" else if (s.clock.running) "STAY WITH THIS MOMENT" else "PAUSED", fontSize = 10.sp, color = MaterialTheme.colorScheme.primary)
                         Box(Modifier.size(64.dp), contentAlignment = Alignment.Center) {
                             Canvas(Modifier.fillMaxSize()) {
-                                drawArc(Color(0xFFB59BE8), -90f, (remaining % 1000) / 1000f * 360f, false, style = Stroke(3.dp.toPx(), cap = StrokeCap.Round))
+                                drawArc(Color(0xFF19B691), -90f, (remaining % 1000) / 1000f * 360f, false, style = Stroke(3.dp.toPx(), cap = StrokeCap.Round))
                             }
                             Text(String.format(Locale.ROOT, "%03d", remaining % 1000), fontSize = 17.sp, fontFamily = FontFamily.Monospace)
                         }
@@ -144,7 +144,7 @@ private fun TimerScreen(timer: FocusTimer, onBack: () -> Unit, onComplete: () ->
                     if (!s.autoChecked) Button(onClick = { message = onComplete(); session = timer.load() }, modifier = Modifier.fillMaxWidth()) { Text("Retry check-in") }
                 }
                 OutlinedButton(onClick = { confirmReset = true }, modifier = Modifier.fillMaxWidth()) { Text("Reset timer") }
-                Text("View timer from its lock-screen notification. The timer keeps time when the screen is off. Allow notifications and precise alarms for timely completion alerts. After a reboot, it pauses for you to review.", color = Color(0xFFB2CBC1), fontSize = 11.sp)
+                Text("View timer from its lock-screen notification. The timer keeps time when the screen is off. Allow notifications and precise alarms for timely completion alerts. After a reboot, it pauses for you to review.", color = Color(0xFFADC6D7), fontSize = 11.sp)
             } else Text("Choose a habit with a focus duration, then tap Start.")
         }
     }
