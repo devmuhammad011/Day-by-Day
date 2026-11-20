@@ -312,7 +312,7 @@ private fun DayByDay(activity: MainActivity) {
                         TextButton(onClick = { openExternal("mailto:mumgloballink@gmail.com?subject=DailyStride%20support", email = true) }) { Text("Email Nova Stack") }
                         Text("mumgloballink@gmail.com", fontSize = 12.sp)
                     } }
-                    item { Text("DailyStride • Version 2.8\nSmall steps. Lasting change.", color = colors.primary, modifier = Modifier.padding(vertical = 16.dp)) }
+                    item { Text("DailyStride • Version 2.9\nSmall steps. Lasting change.", color = colors.primary, modifier = Modifier.padding(vertical = 16.dp)) }
                 }
             }
         }
@@ -427,6 +427,7 @@ private fun WeekSelector(habits: List<Habit>, today: LocalDate, selected: LocalD
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun HabitCard(h: Habit, selected: LocalDate, today: LocalDate, toggle: () -> Unit, edit: () -> Unit, delete: () -> Unit) {
     val context = LocalContext.current
@@ -441,12 +442,7 @@ private fun HabitCard(h: Habit, selected: LocalDate, today: LocalDate, toggle: (
                     modifier = Modifier.semantics { contentDescription = "Complete ${h.name} for $selected" })
                 Column(Modifier.weight(1f).padding(vertical = 7.dp)) {
                     Text(h.name, fontWeight = FontWeight.SemiBold, fontSize = 18.sp, lineHeight = 23.sp)
-                    val details = buildList {
-                        if (!h.scheduled(selected)) add("Not scheduled on this day")
-                        (h.plannedStart ?: h.reminder)?.let { add(LocalTime.parse(it).format(timeFormat)) }
-                        if (h.voice) add("Voice reminder")
-                    }
-                    if (details.isNotEmpty()) Text(details.joinToString(" • "), fontSize = 11.sp, color = colors.onSurface.copy(alpha = 0.65f))
+                    if (!h.scheduled(selected)) Text("Not scheduled on this day", fontSize = 11.sp, color = colors.onSurface.copy(alpha = 0.65f))
                 }
                 Box {
                     IconButton(onClick = { menu = true }, modifier = Modifier.semantics { contentDescription = "Options for ${h.name}" }) { Text("⋮", fontSize = 27.sp, color = colors.onSurface.copy(alpha = 0.8f)) }
@@ -456,11 +452,54 @@ private fun HabitCard(h: Habit, selected: LocalDate, today: LocalDate, toggle: (
                     }
                 }
             }
-            if (h.durationMinutes > 0) {
-                TextButton(onClick = { context.startActivity(Intent(context, TimerActivity::class.java).putExtra("habitId", h.id)) }, modifier = Modifier.padding(start = 44.dp)) {
-                    Text("▶  Start / open timer · ${h.durationMinutes / 60}h ${h.durationMinutes % 60}m", fontSize = 12.sp)
+            Column(Modifier.fillMaxWidth().padding(start = 44.dp, end = 8.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                val workStart = h.plannedStart ?: h.reminder?.takeIf { h.durationMinutes > 0 }
+                if (workStart != null) {
+                    val start = LocalTime.parse(workStart)
+                    val end = start.plusMinutes(h.durationMinutes.toLong())
+                    val nextDay = start.toSecondOfDay() + h.durationMinutes * 60 >= 86400
+                    val workText = "Work: ${start.format(timeFormat)}" + if (h.durationMinutes > 0) " – ${end.format(timeFormat)}${if (nextDay) " (+1 day)" else ""}" else ""
+                    TaskDetailLine(R.drawable.ic_task_clock, workText)
+                }
+                h.reminder?.let { reminder -> TaskDetailLine(R.drawable.ic_task_bell, "Reminder: ${LocalTime.parse(reminder).format(timeFormat)}") }
+                if (workStart == null && h.reminder == null) TaskDetailLine(R.drawable.ic_task_clock, "Any time · no reminder set")
+                if (h.created > today) TaskDetailLine(R.drawable.ic_nav_today, "Starts ${h.created.format(DateTimeFormatter.ofPattern("MMM d, yyyy"))}")
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 3.dp, bottom = 5.dp)) {
+                    if (h.durationMinutes > 0) {
+                        val hours = h.durationMinutes / 60
+                        val minutes = h.durationMinutes % 60
+                        val duration = listOfNotNull(if (hours > 0) "${hours}h" else null, if (minutes > 0) "${minutes}m" else null).joinToString(" ")
+                        TaskBadge(R.drawable.ic_task_timer, "Focus · $duration", colors.primary)
+                    }
+                    if (h.voice && h.reminder != null) TaskBadge(R.drawable.ic_task_voice, "Voice reminder", colors.secondary)
+                    val repeat = if (h.days.size == 7) "Daily" else h.days.sorted().joinToString(" · ") { DayOfWeek.of(it).name.take(3).lowercase().replaceFirstChar(Char::uppercase) }
+                    TaskBadge(R.drawable.ic_nav_today, repeat, colors.onSurface.copy(alpha = 0.7f))
                 }
             }
+            if (h.durationMinutes > 0) {
+                TextButton(onClick = { context.startActivity(Intent(context, TimerActivity::class.java).putExtra("habitId", h.id)) }, modifier = Modifier.padding(start = 44.dp)) {
+                    Text("▶  Start / open timer", fontSize = 12.sp)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TaskDetailLine(icon: Int, label: String) {
+    val color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Icon(painterResource(icon), contentDescription = null, tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f), modifier = Modifier.padding(top = 1.dp).size(14.dp))
+        Text(label, fontSize = 12.sp, lineHeight = 17.sp, color = color, modifier = Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun TaskBadge(icon: Int, label: String, accent: Color) {
+    Surface(color = accent.copy(alpha = 0.09f), shape = RoundedCornerShape(7.dp)) {
+        Row(Modifier.padding(horizontal = 7.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Icon(painterResource(icon), contentDescription = null, tint = accent, modifier = Modifier.size(12.dp))
+            Text(label, fontSize = 10.sp, lineHeight = 14.sp, color = accent)
         }
     }
 }

@@ -83,3 +83,8 @@ A running countdown reaching zero now saves its habit completion automatically, 
 Redesigned the app presentation around the supplied reference: navy backgrounds, cyan completion ring, emerald streak panel and checkboxes, selectable seven-day history bars, compact task cards and a round add button. Bottom navigation now has Today, Progress and Settings; All tasks remains available from Today and the header menu to manage future/rest-day habits. Each task has an accessible three-dot dropdown containing Edit and Delete, with the existing delete confirmation. Focus timers remain available on timed tasks. The progress screen, settings, timer screen and onboarding use the updated palette; the light theme is retained.
 
 Habit storage, schedule conflict checks, automatic timer completion, notifications, voice, backups, package ID and legal URLs are unchanged. Summary values are computed from actual habits; the streak card shows the best current habit streak. On small screens or enlarged text the summary stacks vertically. Android XML and compilation are checked; device visual/touch validation remains necessary.
+
+
+## DailyStride 2.9 — Task schedule details
+
+Task cards retain the navy/cyan layout and overflow Edit/Delete menu. They now show labeled work start/end times, reminder time, next-day markers for overnight durations, future start dates, and compact wrapping badges for Focus duration, Voice reminder and repeat weekdays. Timers without a scheduled start are labeled Any time. Time labels use 12-hour AM/PM and the same reminder fallback used by conflict checking. No habit storage, scheduling, timer, notification or backup behavior changed.
