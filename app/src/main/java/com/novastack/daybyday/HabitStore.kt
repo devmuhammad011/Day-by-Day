@@ -11,7 +11,7 @@ class HabitStore(context: Context) {
     fun load(): List<Habit> {
         val raw = prefs.getString("items", null)
         if (raw != null) return decodeArray(JSONArray(raw))
-        val initial = listOf(Habit(name = "Drink water", emoji = "💧"), Habit(name = "Move for 20 minutes", emoji = "🏃"), Habit(name = "Read a few pages", emoji = "📚"))
+        val initial = emptyList<Habit>()
         save(initial)
         return initial
     }

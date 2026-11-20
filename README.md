@@ -88,3 +88,10 @@ Habit storage, schedule conflict checks, automatic timer completion, notificatio
 ## DailyStride 2.9 — Task schedule details
 
 Task cards retain the navy/cyan layout and overflow Edit/Delete menu. They now show labeled work start/end times, reminder time, next-day markers for overnight durations, future start dates, and compact wrapping badges for Focus duration, Voice reminder and repeat weekdays. Timers without a scheduled start are labeled Any time. Time labels use 12-hour AM/PM and the same reminder fallback used by conflict checking. No habit storage, scheduling, timer, notification or backup behavior changed.
+
+
+## DailyStride 2.10 — Required reminder time and default voice
+
+The task editor now always displays a required reminder-time picker. New tasks cannot be saved until the user confirms a time; existing timed tasks retain their time, while editing a legacy untimed task requires selecting one. The save callback also rejects missing times. Fresh installs start with an empty list instead of untimed sample habits. Existing habits and legacy backups are preserved rather than being silently assigned times.
+
+For a new task, Speak reminder aloud defaults on once both notifications and precise-alarm access are available. The user can turn it off per task; that choice remains respected. The editor responds to permission changes while open unless the user has already changed its voice switch. Existing tasks retain their saved voice choice. Quiet hours, device audio settings, installed TTS voices and background restrictions still apply. Timer-completion speech remains a separate Settings choice.

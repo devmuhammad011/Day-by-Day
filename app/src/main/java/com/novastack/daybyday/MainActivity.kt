@@ -272,7 +272,7 @@ private fun DayByDay(activity: MainActivity) {
                             try { activity.startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:${activity.packageName}"))) }
                             catch (_: Exception) { message = "Open phone Settings → Apps → Special app access → Alarms & reminders." }
                         }) { Text("Allow precise reminders") }
-                        Text("Enable a time and voice inside each habit. Voice needs notification and precise-alarm access; Android or battery restrictions may still delay delivery.", fontSize = 12.sp)
+                        Text("Every new task needs a reminder time. Voice is on by default for new tasks once notifications and precise alarms are allowed; you can turn it off per task. Android or battery restrictions may still delay delivery.", fontSize = 12.sp)
                         SettingToggle("Timer on lock screen", "Show live countdown and task name; your phone's lock-screen notification settings also apply", lockTimer) {
                             lockTimer = it; prefs.edit().putBoolean("lockTimer", it).apply(); FocusTimer(activity).update()
                         }
@@ -312,11 +312,15 @@ private fun DayByDay(activity: MainActivity) {
                         TextButton(onClick = { openExternal("mailto:mumgloballink@gmail.com?subject=DailyStride%20support", email = true) }) { Text("Email Nova Stack") }
                         Text("mumgloballink@gmail.com", fontSize = 12.sp)
                     } }
-                    item { Text("DailyStride • Version 2.9\nSmall steps. Lasting change.", color = colors.primary, modifier = Modifier.padding(vertical = 16.dp)) }
+                    item { Text("DailyStride • Version 2.10\nSmall steps. Lasting change.", color = colors.primary, modifier = Modifier.padding(vertical = 16.dp)) }
                 }
             }
         }
         if (showEditor) HabitEditor(editing, habits, notifications && exact, onDismiss = { showEditor = false }) { name, emoji, days, time, voice, startDate, duration, plannedStart ->
+            if (time.isNullOrBlank()) {
+                message = "Choose a reminder time before saving this task."
+                return@HabitEditor
+            }
             val previous = editing
             save(if (previous == null) habits + Habit(name = name, emoji = emoji, created = startDate, days = days, reminder = time, voice = voice, durationMinutes = duration, plannedStart = plannedStart)
                 else habits.map { if (it.id == previous.id) it.copy(name = name, emoji = emoji, created = startDate, days = days, reminder = time, voice = voice, durationMinutes = duration, plannedStart = plannedStart) else it })
@@ -537,14 +541,18 @@ private fun HabitEditor(habit: Habit?, allHabits: List<Habit>, voiceAllowed: Boo
     var name by remember { mutableStateOf(habit?.name ?: "") }
     var emoji by remember { mutableStateOf(habit?.emoji ?: "🌱") }
     var days by remember { mutableStateOf(habit?.days ?: (1..7).toSet()) }
-    var reminder by remember { mutableStateOf(habit?.reminder != null) }
+    var reminderSelected by remember { mutableStateOf(habit?.reminder != null) }
     val context = LocalContext.current
     var planned by remember { mutableStateOf(habit?.plannedStart != null) }
     var plannedTime by remember { mutableStateOf((habit?.plannedStart ?: habit?.reminder)?.let(LocalTime::parse) ?: LocalTime.of(8, 0)) }
     var startDate by remember { mutableStateOf(habit?.created ?: LocalDate.now()) }
     var time by remember { mutableStateOf(habit?.reminder?.let(LocalTime::parse) ?: LocalTime.now().withSecond(0).withNano(0)) }
     val dateValid = habit?.completed?.none { it < startDate } ?: true
-    var voice by remember { mutableStateOf(habit?.voice ?: false) }
+    var voice by remember { mutableStateOf(habit?.voice ?: voiceAllowed) }
+    var voiceTouched by remember { mutableStateOf(false) }
+    LaunchedEffect(voiceAllowed) {
+        if (habit == null && !voiceTouched) voice = voiceAllowed
+    }
     var timed by remember { mutableStateOf((habit?.durationMinutes ?: 0) > 0) }
     var durationHours by remember { mutableStateOf(((habit?.durationMinutes?.takeIf { it > 0 } ?: 25) / 60).toString()) }
     var durationMins by remember { mutableStateOf(((habit?.durationMinutes?.takeIf { it > 0 } ?: 25) % 60).toString()) }
@@ -552,7 +560,7 @@ private fun HabitEditor(habit: Habit?, allHabits: List<Habit>, voiceAllowed: Boo
     val m = durationMins.toIntOrNull() ?: -1
     val durationValid = h in 0..24 && m in 0..59 && (h * 60 + m) in 1..1440
     val candidate = Habit(id = habit?.id ?: "new-habit-preview", name = name, emoji = emoji, created = startDate, days = days,
-        reminder = if (reminder) time.toString() else null, durationMinutes = if (timed && durationValid) h * 60 + m else 0,
+        reminder = if (reminderSelected) time.toString() else null, durationMinutes = if (timed && durationValid) h * 60 + m else 0,
         plannedStart = if (planned) plannedTime.toString() else null)
     val clash = ScheduleConflict.find(candidate, allHabits)
     AlertDialog(onDismissRequest = onDismiss, title = { Text(if (habit == null) "A fresh start" else "Edit your ritual") },
@@ -597,29 +605,29 @@ private fun HabitEditor(habit: Habit?, allHabits: List<Habit>, voiceAllowed: Boo
                 if (!durationValid) Text("Choose 1 minute to 24 hours. Minutes must be 0–59.", color = MaterialTheme.colorScheme.error)
                 Text("Tap Start on the habit or its reminder notification to begin. When the timer runs to the end, it automatically checks in the habit for the day you started. Pause and Reset do not complete it.", fontSize = 11.sp)
             }
-            if (!planned && reminder) Text("Without a separate work time, the reminder time reserves the start of your focus duration.", fontSize = 11.sp)
+            if (!planned && reminderSelected) Text("Without a separate work time, the reminder time reserves the start of your focus duration.", fontSize = 11.sp)
             if (clash != null) {
                 val format = DateTimeFormatter.ofPattern("EEE, h:mm a", java.util.Locale.ENGLISH)
                 Text("Time conflict with ${clash.habit.name}: ${clash.start.format(format)}${if (clash.end != clash.start) " – ${clash.end.format(format)}" else ""}. Choose another time or different weekdays.", color = MaterialTheme.colorScheme.error)
             }
-            SettingToggle("Reminder", "One reminder on scheduled days", reminder) { reminder = it }
-            if (reminder) {
-                Text("Reminder time", fontWeight = FontWeight.Bold)
-                OutlinedButton(onClick = {
-                    TimePickerDialog(context, { _, hourOfDay, minute -> time = LocalTime.of(hourOfDay, minute) },
-                        time.hour, time.minute, false).show()
-                }, modifier = Modifier.fillMaxWidth()) {
-                    Text(time.format(DateTimeFormatter.ofPattern("h:mm a", java.util.Locale.ENGLISH)), fontSize = 20.sp)
-                }
-                Text("Choose AM for morning or PM for afternoon/evening. Reminders repeat on your selected weekdays from the start date.", fontSize = 11.sp)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Speak reminder aloud", Modifier.weight(1f))
-                    Switch(voice, { voice = it }, enabled = voiceAllowed || voice)
-                }
-                Text(if (voiceAllowed) "Voice reads this habit name aloud. Only enable it if that is OK in public." else "Enable notifications and precise reminders in Settings before turning on voice.", fontSize = 11.sp)
+            Text("Reminder time *", fontWeight = FontWeight.Bold)
+            OutlinedButton(onClick = {
+                TimePickerDialog(context, { _, hourOfDay, minute ->
+                    time = LocalTime.of(hourOfDay, minute)
+                    reminderSelected = true
+                }, time.hour, time.minute, false).show()
+            }, modifier = Modifier.fillMaxWidth()) {
+                Text(if (reminderSelected) time.format(DateTimeFormatter.ofPattern("h:mm a", java.util.Locale.ENGLISH)) else "Choose reminder time", fontSize = 18.sp)
             }
+            Text(if (reminderSelected) "A reminder will repeat on the weekdays you selected." else "Required: choose a reminder time before saving.",
+                fontSize = 11.sp, color = if (reminderSelected) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f) else MaterialTheme.colorScheme.error)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Speak reminder aloud", Modifier.weight(1f))
+                Switch(voice, { voice = it; voiceTouched = true }, enabled = voiceAllowed || voice)
+            }
+            Text(if (voiceAllowed) "Voice starts enabled for new tasks. You can turn it off here; the task name is spoken aloud." else "Allow notifications and precise reminders in Settings to enable the default voice reminder for new tasks.", fontSize = 11.sp)
         } },
-        confirmButton = { TextButton(enabled = name.isNotBlank() && days.isNotEmpty() && dateValid && (!timed || durationValid) && clash == null, onClick = {
-            onSave(name.trim(), emoji, days, if (reminder) time.format(DateTimeFormatter.ofPattern("HH:mm", java.util.Locale.ROOT)) else null, reminder && voice, startDate, if (timed) h * 60 + m else 0, if (planned) plannedTime.format(DateTimeFormatter.ofPattern("HH:mm", java.util.Locale.ROOT)) else null)
+        confirmButton = { TextButton(enabled = name.isNotBlank() && days.isNotEmpty() && dateValid && (!timed || durationValid) && clash == null && reminderSelected, onClick = {
+            onSave(name.trim(), emoji, days, if (reminderSelected) time.format(DateTimeFormatter.ofPattern("HH:mm", java.util.Locale.ROOT)) else null, reminderSelected && voice, startDate, if (timed) h * 60 + m else 0, if (planned) plannedTime.format(DateTimeFormatter.ofPattern("HH:mm", java.util.Locale.ROOT)) else null)
         }) { Text("Save habit") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } })
 }
