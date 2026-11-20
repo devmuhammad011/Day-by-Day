@@ -386,6 +386,7 @@ private fun DailyOverview(habits: List<Habit>, today: LocalDate, streakDate: Loc
     val streak = habits.maxOfOrNull { it.streak(streakDate) } ?: 0
     val dividerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
     BoxWithConstraints(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+        val ringDiameter = (maxWidth * 0.48f).coerceAtMost(190.dp)
         if (maxWidth < 280.dp || LocalDensity.current.fontScale > 1.3f) {
             Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 CompletionRing(complete, due.size, 184.dp)
@@ -393,7 +394,7 @@ private fun DailyOverview(habits: List<Habit>, today: LocalDate, streakDate: Loc
             }
         } else {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                CompletionRing(complete, due.size, (maxWidth * 0.48f).coerceAtMost(190.dp))
+                CompletionRing(complete, due.size, ringDiameter)
                 Spacer(Modifier.width(14.dp))
                 Box(Modifier.width(1.dp).height(130.dp).background(dividerColor))
                 Spacer(Modifier.width(14.dp))
