@@ -104,10 +104,11 @@ private fun DayByDay(activity: MainActivity) {
     fun save(next: List<Habit>) {
         try {
             check(loadError == null) { "Restore your backup before editing unreadable data." }
+            val previousHabits = habits
             store.save(next)
             val activeId = FocusTimer(activity).load()?.habitId
             if (activeId != null && next.none { it.id == activeId }) FocusTimer(activity).clear()
-            ReminderScheduler.sync(activity, habits, next)
+            ReminderScheduler.sync(activity, previousHabits, next)
             habits = next
         } catch (e: Exception) { message = e.message ?: "Could not save changes." }
     }
@@ -322,7 +323,8 @@ private fun DayByDay(activity: MainActivity) {
             confirmButton = { TextButton(onClick = {
                 try {
                     val safe = next.map { it.copy(voice = false) }
-                    store.save(safe); FocusTimer(activity).clear(); ReminderScheduler.sync(activity, habits, safe); habits = safe; loadError = null; imported = null; message = "Backup restored."
+                    val previousHabits = habits
+                    store.save(safe); FocusTimer(activity).clear(); ReminderScheduler.sync(activity, previousHabits, safe); habits = safe; loadError = null; imported = null; message = "Backup restored."
                 } catch (_: Exception) { imported = null; message = "Could not restore backup." }
             }) { Text("Replace and restore") } }, dismissButton = { TextButton(onClick = { imported = null }) { Text("Cancel") } }) }
         message?.let { text -> AlertDialog(onDismissRequest = { message = null }, title = { Text("DailyStride") }, text = { Text(text) }, confirmButton = { TextButton(onClick = { message = null }) { Text("OK") } }) }

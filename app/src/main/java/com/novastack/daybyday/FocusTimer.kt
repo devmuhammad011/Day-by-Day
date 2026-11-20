@@ -40,6 +40,7 @@ class FocusTimer(private val context: Context) {
     fun toggle() {
         val s = load() ?: return
         val now = SystemClock.elapsedRealtime()
+        if (s.clock.running && s.clock.remaining(now) == 0L) { finish(); return }
         save(s.copy(clock = if (s.clock.running) s.clock.pause(now) else s.clock.resume(now)))
         update()
     }
