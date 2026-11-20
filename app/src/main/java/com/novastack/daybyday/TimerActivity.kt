@@ -59,18 +59,19 @@ class TimerActivity : ComponentActivity() {
                     val keyguard = getSystemService(KeyguardManager::class.java)
                     if (keyguard.isKeyguardLocked) {
                         keyguard.requestDismissKeyguard(this, null)
-                        return@TimerScreen "Unlock your phone, then tap Mark habit complete to save your check-in."
+                        return@TimerScreen "Unlock your phone, then tap Retry check-in to save your check-in."
                     }
-                    val id = timer.load()?.habitId
+                    val finishedSession = timer.load()
+                    val id = finishedSession?.habitId
                     val store = HabitStore(this)
                     try {
                         val old = store.load()
-                        val today = LocalDate.now()
+                        val today = finishedSession?.startedOn ?: LocalDate.now()
                         val h = old.find { it.id == id } ?: return@TimerScreen "This habit was removed. Your timer is complete."
-                        if (!h.scheduled(today)) return@TimerScreen "This habit is not scheduled for today. Session complete; no check-in was changed."
+                        if (!h.scheduled(today)) return@TimerScreen "This habit is not scheduled for $today. Session complete; no check-in was changed."
                         val next = old.map { if (it.id == id) it.copy(completed = it.completed + today) else it }
-                        store.save(next); ReminderScheduler.sync(this, old, next)
-                        "Habit checked in for today. Well done!"
+                        store.save(next); timer.recordCheckIn(); ReminderScheduler.sync(this, old, next)
+                        "Habit checked in for $today. Well done!"
                     } catch (_: Exception) { "Could not save your check-in. Try again from the habit list." }
                 })
             }
@@ -137,7 +138,10 @@ private fun TimerScreen(timer: FocusTimer, onBack: () -> Unit, onComplete: () ->
                     Column { Text("REMAINING", fontSize = 10.sp); Text(timeText(remaining), fontSize = 18.sp, fontFamily = FontFamily.Monospace) }
                 }
                 if (remaining > 0L) Button(onClick = { timer.toggle(); session = timer.load() }, modifier = Modifier.fillMaxWidth().height(54.dp)) { Text(if (s.clock.running) "Pause session" else "Resume session") }
-                else Button(onClick = { message = onComplete() }, modifier = Modifier.fillMaxWidth()) { Text("Mark habit complete") }
+                else {
+                    Text(s.completionNote.ifBlank { "Finishing your session…" }, color = MaterialTheme.colorScheme.primary)
+                    if (!s.autoChecked) Button(onClick = { message = onComplete(); session = timer.load() }, modifier = Modifier.fillMaxWidth()) { Text("Retry check-in") }
+                }
                 OutlinedButton(onClick = { confirmReset = true }, modifier = Modifier.fillMaxWidth()) { Text("Reset timer") }
                 Text("View timer from its lock-screen notification. The timer keeps time when the screen is off. Allow notifications and precise alarms for timely completion alerts. After a reboot, it pauses for you to review.", color = Color(0xFFB2CBC1), fontSize = 11.sp)
             } else Text("Choose a habit with a focus duration, then tap Start.")

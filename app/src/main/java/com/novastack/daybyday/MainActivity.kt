@@ -140,6 +140,9 @@ private fun DayByDay(activity: MainActivity) {
         if (now != today) { today = now; selected = now }
         notifications = notificationsAllowed(activity)
         exact = ReminderScheduler.exactAllowed(activity)
+        FocusTimer(activity).load()?.let { session ->
+            if (!session.notified && session.clock.remaining(android.os.SystemClock.elapsedRealtime()) == 0L) FocusTimer(activity).finish()
+        }
     }
     DisposableEffect(activity) {
         val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) {
@@ -147,8 +150,13 @@ private fun DayByDay(activity: MainActivity) {
             if (loadError == null) try { habits = store.load() } catch (_: Exception) { }
             if (loadError == null) habits.forEach { ReminderScheduler.schedule(activity, it) }
         } }
+        val saved = activity.getSharedPreferences("habits", android.content.Context.MODE_PRIVATE)
+        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == "items" && loadError == null) try { habits = store.load() } catch (_: Exception) { }
+        }
+        saved.registerOnSharedPreferenceChangeListener(listener)
         activity.lifecycle.addObserver(observer)
-        onDispose { activity.lifecycle.removeObserver(observer) }
+        onDispose { activity.lifecycle.removeObserver(observer); saved.unregisterOnSharedPreferenceChangeListener(listener) }
     }
     LaunchedEffect(Unit) { while (true) { refresh(); delay(30_000) } }
     val existingConflict = remember(habits, today) { ScheduleConflict.firstIn(habits, today) }
@@ -297,7 +305,7 @@ private fun DayByDay(activity: MainActivity) {
                         TextButton(onClick = { openExternal("mailto:mumgloballink@gmail.com?subject=DailyStride%20support", email = true) }) { Text("Email Nova Stack") }
                         Text("mumgloballink@gmail.com", fontSize = 12.sp)
                     } }
-                    item { Text("DailyStride • Version 2.6\nSmall steps. Lasting change.", color = colors.primary, modifier = Modifier.padding(vertical = 16.dp)) }
+                    item { Text("DailyStride • Version 2.7\nSmall steps. Lasting change.", color = colors.primary, modifier = Modifier.padding(vertical = 16.dp)) }
                 }
             }
         }
@@ -492,7 +500,7 @@ private fun HabitEditor(habit: Habit?, allHabits: List<Habit>, voiceAllowed: Boo
                     OutlinedTextField(durationMins, { durationMins = it.filter(Char::isDigit).take(2) }, label = { Text("Minutes") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
                 }
                 if (!durationValid) Text("Choose 1 minute to 24 hours. Minutes must be 0–59.", color = MaterialTheme.colorScheme.error)
-                Text("Tap Start on the habit or its reminder notification to begin. Completing the timer lets you check in; it never marks the habit automatically.", fontSize = 11.sp)
+                Text("Tap Start on the habit or its reminder notification to begin. When the timer runs to the end, it automatically checks in the habit for the day you started. Pause and Reset do not complete it.", fontSize = 11.sp)
             }
             if (!planned && reminder) Text("Without a separate work time, the reminder time reserves the start of your focus duration.", fontSize = 11.sp)
             if (clash != null) {

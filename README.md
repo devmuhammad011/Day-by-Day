@@ -71,3 +71,8 @@ Five onboarding pages explain the dashboard, habit schedules and conflict preven
 ## DailyStride 2.6 — Policy and support links
 
 Settings → About & support contains Privacy Policy, Terms of Use, Help & Support, the product website and Email Nova Stack. Web links open with Android's external browser; email opens the user's mail composer without sending a message. The links use the published `https://dayly-stride-website.vercel.app/` origin with `/privacy/`, `/terms/` and `/support/` paths. Missing handlers or blocked intents show an error and the address. No WebView, network SDK or Android internet permission was added. Website source remains in the separate DaylyStride-website repository.
+
+
+## DailyStride 2.7 — Automatic focus check-in
+
+A running countdown reaching zero now saves its habit completion automatically, including from the background completion alarm or when the expired session is reopened. The stored session start date identifies the correct day for overnight sessions. Pause and reset do not award check-ins; a session restored paused after reboot requires review. Completion is idempotent, so another finish callback or another full session cannot toggle a checked habit off. Deleted or no-longer-scheduled habits are left untouched; save failures show a retry action. The dashboard observes stored check-ins so its tick, totals and streaks refresh immediately. These automatic completions implement user consent given when starting the timer, including while locked; manual retry still requires unlocking.

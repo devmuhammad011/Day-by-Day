@@ -4,26 +4,31 @@ import android.app.*
 import android.content.*
 import android.os.*
 import android.provider.Settings
+import java.time.LocalDate
 
 class FocusTimer(private val context: Context) {
     private val prefs = context.getSharedPreferences("focus_timer", Context.MODE_PRIVATE)
-    data class Session(val habitId: String, val name: String, val totalMs: Long, val clock: FocusClock, val notified: Boolean)
+    data class Session(val habitId: String, val name: String, val totalMs: Long, val clock: FocusClock, val notified: Boolean, val startedOn: LocalDate = LocalDate.now(), val autoChecked: Boolean = false, val completionNote: String = "")
     private fun boot() = Settings.Global.getInt(context.contentResolver, Settings.Global.BOOT_COUNT, 0)
     fun load(): Session? {
         val id = prefs.getString("id", null) ?: return null
+        val startedOn = runCatching { LocalDate.parse(prefs.getString("startedOn", null)) }.getOrDefault(LocalDate.now())
+        val checked = prefs.getBoolean("autoChecked", false)
+        val note = prefs.getString("completionNote", "") ?: ""
         var clock = FocusClock(prefs.getLong("remaining", 0), prefs.getLong("anchor", 0), prefs.getBoolean("running", false))
         if (clock.running && prefs.getInt("boot", -1) != boot()) {
             // Reboot loses the monotonic anchor. Pause instead of silently starting a new timer.
             clock = FocusClock((prefs.getLong("wallEnd", 0) - System.currentTimeMillis()).coerceIn(0L, clock.remainingMs))
-            save(Session(id, prefs.getString("name", "Habit")!!, prefs.getLong("total", 0), clock, false))
+            save(Session(id, prefs.getString("name", "Habit")!!, prefs.getLong("total", 0), clock, false, startedOn, checked, note))
         }
-        return Session(id, prefs.getString("name", "Habit")!!, prefs.getLong("total", 0), clock, prefs.getBoolean("notified", false))
+        return Session(id, prefs.getString("name", "Habit")!!, prefs.getLong("total", 0), clock, prefs.getBoolean("notified", false), startedOn, checked, note)
     }
     private fun save(s: Session) {
         prefs.edit().putString("id", s.habitId).putString("name", s.name).putLong("total", s.totalMs)
             .putLong("remaining", s.clock.remainingMs).putLong("anchor", s.clock.anchorMs).putBoolean("running", s.clock.running)
             .putInt("boot", boot()).putLong("wallEnd", System.currentTimeMillis() + s.clock.remaining(SystemClock.elapsedRealtime()))
-            .putBoolean("notified", s.notified).commit()
+            .putBoolean("notified", s.notified).putString("startedOn", s.startedOn.toString())
+            .putBoolean("autoChecked", s.autoChecked).putString("completionNote", s.completionNote).commit()
     }
     private fun alarm() = PendingIntent.getBroadcast(context, 901, Intent(context, FocusReceiver::class.java).setAction("FINISH"), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
     private fun notifyManager() = context.getSystemService(NotificationManager::class.java)
@@ -40,7 +45,11 @@ class FocusTimer(private val context: Context) {
     }
     fun reset() {
         val s = load() ?: return
-        save(s.copy(clock = FocusClock(s.totalMs), notified = false)); update()
+        save(s.copy(clock = FocusClock(s.totalMs), notified = false, startedOn = LocalDate.now(), autoChecked = false, completionNote = "")); update()
+    }
+    fun recordCheckIn() {
+        val s = load() ?: return
+        save(s.copy(autoChecked = true, completionNote = "✓ Habit completed for ${s.startedOn}."))
     }
     fun clear() {
         context.getSystemService(AlarmManager::class.java).cancel(alarm())
@@ -81,12 +90,31 @@ class FocusTimer(private val context: Context) {
         val s = load() ?: return
         if (s.clock.remaining(SystemClock.elapsedRealtime()) > 0) return
         if (s.notified) return
-        save(s.copy(clock = FocusClock(0), notified = true))
+        var checked = false
+        val note = if (!s.clock.running) "Session ended after restart. Review your habit before checking in." else try {
+            val store = HabitStore(context)
+            val habits = store.load()
+            val habit = habits.find { it.id == s.habitId }
+            when {
+                habit == null -> "Session complete. This habit has been removed."
+                !habit.scheduled(s.startedOn) -> "Session complete. This habit was not scheduled for ${s.startedOn}."
+                else -> {
+                    val completed = FocusCompletion.complete(habit, s.startedOn, s.clock, SystemClock.elapsedRealtime())
+                    store.save(habits.map { if (it.id == habit.id) completed else it })
+                    checked = true
+                    // Saving the check-in must not depend on notification/alarm permissions.
+                    runCatching { ReminderScheduler.cancel(context, completed) }
+                    runCatching { ReminderScheduler.schedule(context, completed) }
+                    "✓ Habit completed automatically for ${s.startedOn}."
+                }
+            }
+        } catch (_: Exception) { "Session complete. Could not save the check-in; open the timer to retry." }
+        save(s.copy(clock = FocusClock(0), notified = true, autoChecked = checked, completionNote = note))
         notifyManager().cancel(901)
         ReminderScheduler.channel(context)
         val open = PendingIntent.getActivity(context, 902, Intent(context, TimerActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val notification = Notification.Builder(context, ReminderScheduler.CHANNEL).setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle("Focus complete: ${s.name}").setContentText("Your session is complete. Open to check in.")
+            .setContentTitle("Focus complete: ${s.name}").setContentText(note)
             .setContentIntent(open).setAutoCancel(true).build()
         try { notifyManager().notify(904, notification) } catch (_: SecurityException) { }
         val settings = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
