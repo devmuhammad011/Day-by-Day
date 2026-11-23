@@ -32,6 +32,11 @@ class FocusTimer(private val context: Context) {
     }
     private fun alarm() = PendingIntent.getBroadcast(context, 901, Intent(context, FocusReceiver::class.java).setAction("FINISH"), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
     private fun notifyManager() = context.getSystemService(NotificationManager::class.java)
+    fun prepare(habit: Habit) {
+        require(habit.durationMinutes in 1..1440)
+        save(Session(habit.id, habit.name, habit.durationMinutes * 60000L, FocusClock(habit.durationMinutes * 60000L), false))
+        update()
+    }
     fun start(habit: Habit) {
         require(habit.durationMinutes in 1..1440)
         save(Session(habit.id, habit.name, habit.durationMinutes * 60000L, FocusClock(habit.durationMinutes * 60000L).resume(SystemClock.elapsedRealtime()), false))
@@ -41,7 +46,7 @@ class FocusTimer(private val context: Context) {
         val s = load() ?: return
         val now = SystemClock.elapsedRealtime()
         if (s.clock.running && s.clock.remaining(now) == 0L) { finish(); return }
-        save(s.copy(clock = if (s.clock.running) s.clock.pause(now) else s.clock.resume(now)))
+        save(s.copy(clock = if (s.clock.running) s.clock.pause(now) else s.clock.resume(now), startedOn = if (!s.clock.running && s.clock.remainingMs == s.totalMs) LocalDate.now() else s.startedOn))
         update()
     }
     fun reset() {
@@ -70,13 +75,13 @@ class FocusTimer(private val context: Context) {
         val open = PendingIntent.getActivity(context, 902, Intent(context, TimerActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val toggle = PendingIntent.getBroadcast(context, 903, Intent(context, FocusReceiver::class.java).setAction("TOGGLE"), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val builder = Notification.Builder(context, "focus_progress").setSmallIcon(R.drawable.ic_notification).setContentTitle(s.name)
-            .setContentText(if (s.clock.running) "Focus timer running • Tap to open" else "Paused • ${remaining / 60000}:${"%02d".format((remaining / 1000) % 60)} remaining")
+            .setContentText(if (s.clock.running) "Focus timer running • Tap to open" else if (remaining == s.totalMs) "Ready • Tap Start to begin" else "Paused • ${remaining / 60000}:${"%02d".format((remaining / 1000) % 60)} remaining")
             .setContentIntent(open).setOngoing(true).setOnlyAlertOnce(true)
             .setCategory(Notification.CATEGORY_ALARM)
             .setVisibility(if (showOnLockScreen) Notification.VISIBILITY_PUBLIC else Notification.VISIBILITY_SECRET)
             .setSubText("DailyStride • Focus timer")
             .addAction(Notification.Action.Builder(null, "View timer", open).build())
-            .addAction(Notification.Action.Builder(null, if (s.clock.running) "Pause" else "Resume", toggle).build())
+            .addAction(Notification.Action.Builder(null, if (s.clock.running) "Pause" else if (remaining == s.totalMs) "Start" else "Resume", toggle).build())
         if (s.clock.running) builder.setWhen(System.currentTimeMillis() + remaining).setUsesChronometer(true).setChronometerCountDown(true)
         try { notifyManager().notify(901, builder.build()) } catch (_: SecurityException) { }
         if (s.clock.running) {

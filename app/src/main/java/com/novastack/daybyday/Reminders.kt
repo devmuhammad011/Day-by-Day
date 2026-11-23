@@ -51,6 +51,7 @@ object ReminderScheduler {
     fun cancel(context: Context, h: Habit) {
         val alarm = context.getSystemService(AlarmManager::class.java)
         alarm.cancel(pending(context, h)); alarm.cancel(pending(context, h, true))
+        context.getSharedPreferences("alarm_occurrences", Context.MODE_PRIVATE).edit().remove(h.id + "/regular").remove(h.id + "/snooze").apply()
     }
     fun schedule(context: Context, h: Habit, snooze: Boolean = false) {
         val alarm = context.getSystemService(AlarmManager::class.java)
@@ -58,6 +59,7 @@ object ReminderScheduler {
         val now = LocalDateTime.now()
         val next = if (snooze) now.plusMinutes(10) else h.nextReminder(now) ?: return
         val millis = next.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+        context.getSharedPreferences("alarm_occurrences", Context.MODE_PRIVATE).edit().putLong(h.id + if (snooze) "/snooze" else "/regular", millis).apply()
         val pi = pending(context, h, snooze, millis)
         try {
             if (exactAllowed(context)) alarm.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, millis, pi)
@@ -75,6 +77,12 @@ object ReminderScheduler {
 }
 
 object VoicePlayback {
+    fun nextBoundary(context: Context, now: Long, includeHabits: Boolean = true): Long? {
+        val registered = context.getSharedPreferences("alarm_occurrences", Context.MODE_PRIVATE).all.values.filterIsInstance<Long>().filter { it > now }
+        val regular = if (includeHabits) runCatching { HabitStore(context).load().mapNotNull { it.nextReminder(LocalDateTime.now())?.atZone(ZoneId.systemDefault())?.toInstant()?.toEpochMilli() } }.getOrDefault(emptyList()) else emptyList()
+        val focus = FocusTimer(context).load()?.let { if (it.clock.running) it.clock.remaining(SystemClock.elapsedRealtime()).takeIf { ms -> ms > 0 }?.plus(now) else null }
+        return (registered + regular + listOfNotNull(focus)).filter { it > now }.minOrNull()
+    }
     fun start(context: Context, name: String, dueAt: Long, completed: Boolean = false, preview: Boolean = false, token: String = UUID.randomUUID().toString()) {
         if (!ReminderDelivery.isFresh(dueAt, System.currentTimeMillis())) {
             VoiceDiagnostics.record(context, "Late reminder: voice skipped to avoid replaying an old alarm."); return
@@ -134,14 +142,15 @@ class ReminderReceiver : BroadcastReceiver() {
             .setContentTitle(if (fresh) habit.name else "Missed reminder: ${habit.name}")
             .setContentText(if (fresh) "Time for a small step. Open DailyStride to check in." else "Scheduled for $time. Delivered late by Android; no voice replay.")
             .setContentIntent(open).setAutoCancel(true).addAction(Notification.Action.Builder(null, "Remind in 10 min", snooze).build())
-        if (habit.durationMinutes > 0) builder.addAction(Notification.Action.Builder(null, "Start", start).build())
+        if (habit.durationMinutes > 0) builder.addAction(Notification.Action.Builder(null, "View focus", start).build())
         context.getSystemService(NotificationManager::class.java).notify(habit.id, 1, builder.build())
         if (habit.voice) VoicePlayback.start(context, habit.name, dueAt, token = "$key/$dueAt")
     }
 }
 
 class VoiceReminderService : Service(), TextToSpeech.OnInitListener {
-    private data class Speech(val name: String, val dueAt: Long, val completed: Boolean, val token: String)
+    private data class Speech(val name: String, val dueAt: Long, val completed: Boolean, val token: String,
+        val repeats: Int, val timed: Boolean, var endAt: Long, var played: Int = 0)
     private var tts: TextToSpeech? = null
     private var ready = false
     private var focus: AudioFocusRequest? = null
@@ -149,6 +158,22 @@ class VoiceReminderService : Service(), TextToSpeech.OnInitListener {
     private val queue = ArrayDeque<Speech>()
     private val seen = mutableSetOf<String>()
     private var speaking = false
+    private var current: Speech? = null
+    private var repeatJob: Runnable? = null
+    private val boundaryGuard = object : Runnable {
+        override fun run() {
+            val active = current ?: return
+            val now = System.currentTimeMillis()
+            active.endAt = minOf(active.endAt, VoicePlayback.nextBoundary(this@VoiceReminderService, now, includeHabits = false)?.minus(500) ?: Long.MAX_VALUE)
+            if (now >= active.endAt) {
+                current = null; speaking = false
+                repeatJob?.let { handler.removeCallbacks(it) }; handler.removeCallbacks(timeout)
+                tts?.stop()
+                VoiceDiagnostics.record(this@VoiceReminderService, "Voice stopped before the next reminder or the chosen time limit.")
+                next()
+            } else handler.postDelayed(this, 250)
+        }
+    }
     private var wakeLock: PowerManager.WakeLock? = null
     private val timeout = Runnable {
         VoiceDiagnostics.record(this, "Voice timed out. Check the installed Text-to-Speech engine and downloaded voice data.")
@@ -156,11 +181,13 @@ class VoiceReminderService : Service(), TextToSpeech.OnInitListener {
     }
     override fun onBind(intent: Intent?) = null
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == "STOP_VOICE") { VoiceDiagnostics.record(this, "Voice stopped by you."); queue.clear(); current = null; stopSelf(); return START_NOT_STICKY }
         getSystemService(NotificationManager::class.java).createNotificationChannel(NotificationChannel("voice_status", "Voice reminder status", NotificationManager.IMPORTANCE_LOW))
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
+        val stop = PendingIntent.getService(this, 43, Intent(this, VoiceReminderService::class.java).setAction("STOP_VOICE"), PendingIntent.FLAG_IMMUTABLE)
         startForeground(42, Notification.Builder(this, "voice_status").setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("DailyStride voice reminder").setContentText("Preparing a spoken reminder")
-            .setContentIntent(open).setOnlyAlertOnce(true).build())
+            .setContentIntent(open).setOnlyAlertOnce(true).addAction(Notification.Action.Builder(null, "Stop voice", stop).build()).build())
         val dueAt = intent?.getLongExtra("dueAt", 0) ?: 0
         if (!ReminderDelivery.isFresh(dueAt, System.currentTimeMillis())) {
             VoiceDiagnostics.record(this, "Late reminder: voice skipped to avoid replaying an old alarm.")
@@ -170,12 +197,24 @@ class VoiceReminderService : Service(), TextToSpeech.OnInitListener {
         if (wakeLock == null) wakeLock = getSystemService(PowerManager::class.java).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "DailyStride:voice").apply { setReferenceCounted(false) }
         if (wakeLock?.isHeld != true) wakeLock?.acquire(60000L)
         val token = intent?.getStringExtra("token") ?: UUID.randomUUID().toString()
-        if (seen.add(token) && queue.size < 8) queue.addLast(Speech(intent?.getStringExtra("name") ?: "Your habit", dueAt, intent?.getBooleanExtra("completedTimer", false) ?: false, token))
+        if (seen.add(token)) {
+            // A new reminder takes precedence over repeats of the previous one.
+            current = null; speaking = false
+            repeatJob?.let { handler.removeCallbacks(it) }; handler.removeCallbacks(boundaryGuard); handler.removeCallbacks(timeout)
+            tts?.stop(); queue.clear()
+            val prefs = getSharedPreferences("settings", MODE_PRIVATE)
+            val timed = prefs.getBoolean("voiceRepeatTimed", false)
+            val repeats = VoiceRepeatPolicy.count(prefs.getInt("voiceRepeatCount", 3))
+            val now = System.currentTimeMillis()
+            val end = VoiceRepeatPolicy.deadline(now, if (timed) prefs.getInt("voiceRepeatMinutes", 1) else null, VoicePlayback.nextBoundary(this, now))
+            queue.addLast(Speech(intent?.getStringExtra("name") ?: "Your habit", dueAt, intent?.getBooleanExtra("completedTimer", false) ?: false, token, repeats, timed, end))
+        }
         if (tts == null) {
             VoiceDiagnostics.record(this, "Preparing the device Text-to-Speech engine…")
             handler.postDelayed(timeout, 25000)
             tts = TextToSpeech(this, this)
         } else if (ready && !speaking) next()
+        else if (!ready) handler.postDelayed(timeout, 25000)
         return START_NOT_STICKY
     }
     override fun onInit(status: Int) {
@@ -193,7 +232,8 @@ class VoiceReminderService : Service(), TextToSpeech.OnInitListener {
         if (speaking) return
         while (queue.isNotEmpty()) {
             val speech = queue.removeFirst()
-            if (!ReminderDelivery.isFresh(speech.dueAt, System.currentTimeMillis())) {
+            val currentTime = System.currentTimeMillis()
+            if (currentTime >= speech.endAt || (speech.played == 0 && !ReminderDelivery.isFresh(speech.dueAt, currentTime))) {
                 VoiceDiagnostics.record(this, "Queued reminder expired; no old voice was replayed."); continue
             }
             val audio = getSystemService(AudioManager::class.java)
@@ -228,20 +268,32 @@ class VoiceReminderService : Service(), TextToSpeech.OnInitListener {
                 VoiceDiagnostics.record(this, "Android denied audio focus. Try Test voice reminder when no call is active."); continue
             }
             engine.setAudioAttributes(attrs)
+            val utteranceId = "${speech.token}/${speech.played}"
             engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                 override fun onStart(id: String?) {}
-                override fun onDone(id: String?) { handler.post { speaking = false; VoiceDiagnostics.record(this@VoiceReminderService, if (hausa) "Voice spoken successfully (Hausa)." else "Voice spoken successfully (English)."); next() } }
-                @Deprecated("Platform callback") override fun onError(id: String?) { handler.post { speaking = false; VoiceDiagnostics.record(this@VoiceReminderService, "Speech engine reported an error. Check its installed voice data."); next() } }
+                override fun onDone(id: String?) { handler.post {
+                    if (id != utteranceId || current?.token != speech.token) return@post
+                    speaking = false; handler.removeCallbacks(timeout)
+                    speech.played++
+                    VoiceDiagnostics.record(this@VoiceReminderService, "Voice spoken ${speech.played}${if (speech.timed) " times" else " of ${speech.repeats} times"}.")
+                    if (VoiceRepeatPolicy.again(speech.played, speech.repeats, speech.timed, System.currentTimeMillis(), speech.endAt)) {
+                        repeatJob = Runnable { if (current?.token == speech.token) { queue.addFirst(speech); next() } }
+                        handler.postDelayed(repeatJob!!, 3000)
+                    } else { current = null; handler.removeCallbacks(boundaryGuard); next() }
+                } }
+                @Deprecated("Platform callback") override fun onError(id: String?) { handler.post { if (id == utteranceId && current?.token == speech.token) { current = null; speaking = false; VoiceDiagnostics.record(this@VoiceReminderService, "Speech engine reported an error. Check its installed voice data."); next() } } }
             })
             val time = LocalTime.now().format(DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH))
             val prefix = if (prefs.getBoolean("sayTime", true)) if (hausa) "Yanzu karfe $time. " else "It is $time. " else ""
             val text = prefix + if (speech.completed) {
                 if (hausa) "Lokacin aikin ${speech.name} ya cika. Ka yi kokari!" else "Your focus session for ${speech.name} is complete. Well done!"
             } else if (hausa) "Lokacin ${speech.name} ya yi." else "Time for ${speech.name}."
-            speaking = true
+            current = speech; speaking = true
+            wakeLock?.acquire(60000L)
+            handler.removeCallbacks(boundaryGuard); handler.post(boundaryGuard)
             handler.postDelayed(timeout, 25000)
-            if (engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, speech.token) == TextToSpeech.ERROR) {
-                speaking = false; handler.removeCallbacks(timeout)
+            if (engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, utteranceId) == TextToSpeech.ERROR) {
+                speaking = false; current = null; handler.removeCallbacks(timeout); handler.removeCallbacks(boundaryGuard)
                 VoiceDiagnostics.record(this, "Speech could not start. Check the device's TTS engine and voice downloads.")
                 continue
             }
@@ -251,7 +303,7 @@ class VoiceReminderService : Service(), TextToSpeech.OnInitListener {
     }
     override fun onDestroy() {
         handler.removeCallbacksAndMessages(null)
-        queue.clear(); speaking = false; ready = false
+        queue.clear(); current = null; speaking = false; ready = false
         tts?.stop(); tts?.shutdown(); tts = null
         if (wakeLock?.isHeld == true) wakeLock?.release(); wakeLock = null
         focus?.let { getSystemService(AudioManager::class.java).abandonAudioFocusRequest(it) }

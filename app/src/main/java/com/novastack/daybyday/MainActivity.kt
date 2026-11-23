@@ -91,6 +91,10 @@ private fun DayByDay(activity: MainActivity) {
     var lockTimer by remember { mutableStateOf(prefs.getBoolean("lockTimer", true)) }
     var speakTimerEnd by remember { mutableStateOf(prefs.getBoolean("speakTimerEnd", false)) }
     var sayTime by remember { mutableStateOf(prefs.getBoolean("sayTime", true)) }
+    var repeatTimed by remember { mutableStateOf(prefs.getBoolean("voiceRepeatTimed", false)) }
+    var repeatCount by remember { mutableStateOf(prefs.getInt("voiceRepeatCount", 3).toString()) }
+    var repeatMinutes by remember { mutableStateOf(prefs.getInt("voiceRepeatMinutes", 1).toString()) }
+    var keepFocusAwake by remember { mutableStateOf(prefs.getBoolean("keepFocusAwake", true)) }
     var lastVoiceStatus by remember { mutableStateOf(VoiceDiagnostics.latest(activity)) }
     var notifications by remember { mutableStateOf(notificationsAllowed(activity)) }
     var exact by remember { mutableStateOf(ReminderScheduler.exactAllowed(activity)) }
@@ -281,6 +285,30 @@ private fun DayByDay(activity: MainActivity) {
                         SettingToggle("Timer on lock screen", "Show live countdown and task name; your phone's lock-screen notification settings also apply", lockTimer) {
                             lockTimer = it; prefs.edit().putBoolean("lockTimer", it).apply(); FocusTimer(activity).update()
                         }
+                        SettingToggle("Keep focus screen awake", "While a running timer is visible, keep its screen on. The power button can still turn it off.", keepFocusAwake) {
+                            keepFocusAwake = it; prefs.edit().putBoolean("keepFocusAwake", it).apply()
+                        }
+                        Text("Voice repetition", fontWeight = FontWeight.Bold)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FilterChip(selected = !repeatTimed, onClick = { repeatTimed = false; prefs.edit().putBoolean("voiceRepeatTimed", false).apply() }, label = { Text("Repeat count") })
+                            FilterChip(selected = repeatTimed, onClick = { repeatTimed = true; prefs.edit().putBoolean("voiceRepeatTimed", true).apply() }, label = { Text("For minutes") })
+                        }
+                        if (repeatTimed) {
+                            val valid = (repeatMinutes.toIntOrNull() ?: 0) in 1..1440
+                            OutlinedTextField(repeatMinutes, { value ->
+                                repeatMinutes = value.filter(Char::isDigit).take(4)
+                                repeatMinutes.toIntOrNull()?.takeIf { it in 1..1440 }?.let { prefs.edit().putInt("voiceRepeatMinutes", it).apply() }
+                            }, label = { Text("Speak for minutes (1–1440)") }, singleLine = true, isError = !valid, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                            if (!valid) Text("Enter 1–1440 minutes. Until valid, the last saved value is used.", color = colors.error, fontSize = 11.sp)
+                        } else {
+                            val valid = (repeatCount.toIntOrNull() ?: 0) in 3..999
+                            OutlinedTextField(repeatCount, { value ->
+                                repeatCount = value.filter(Char::isDigit).take(3)
+                                repeatCount.toIntOrNull()?.takeIf { it in 3..999 }?.let { prefs.edit().putInt("voiceRepeatCount", it).apply() }
+                            }, label = { Text("Repetitions (minimum 3)") }, singleLine = true, isError = !valid, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                            if (!valid) Text("Choose 3–999 repetitions. There is no Once mode; the last valid value remains active.", color = colors.error, fontSize = 11.sp)
+                        }
+                        Text("Default: 3 repetitions, with a short pause between phrases. Minute mode repeats until its time limit. Both stop early before another reminder or focus completion, or when you tap Stop voice in the notification.", fontSize = 12.sp)
                         SettingToggle("Speak when timer ends", "Announce task completion aloud; needs notifications, precise alarms and a working TTS voice", speakTimerEnd) {
                             speakTimerEnd = it; prefs.edit().putBoolean("speakTimerEnd", it).apply()
                         }
@@ -324,7 +352,7 @@ private fun DayByDay(activity: MainActivity) {
                         TextButton(onClick = { openExternal("mailto:mumgloballink@gmail.com?subject=DailyStride%20support", email = true) }) { Text("Email Nova Stack") }
                         Text("mumgloballink@gmail.com", fontSize = 12.sp)
                     } }
-                    item { Text("DailyStride • Version 2.11\nSmall steps. Lasting change.", color = colors.primary, modifier = Modifier.padding(vertical = 16.dp)) }
+                    item { Text("DailyStride • Version 2.12\nSmall steps. Lasting change.", color = colors.primary, modifier = Modifier.padding(vertical = 16.dp)) }
                 }
             }
         }
@@ -493,7 +521,7 @@ private fun HabitCard(h: Habit, selected: LocalDate, today: LocalDate, toggle: (
             }
             if (h.durationMinutes > 0) {
                 TextButton(onClick = { context.startActivity(Intent(context, TimerActivity::class.java).putExtra("habitId", h.id)) }, modifier = Modifier.padding(start = 44.dp)) {
-                    Text("▶  Start / open timer", fontSize = 12.sp)
+                    Text("▶  Open focus timer", fontSize = 12.sp)
                 }
             }
         }
@@ -611,7 +639,7 @@ private fun HabitEditor(habit: Habit?, allHabits: List<Habit>, voiceAllowed: Boo
                     OutlinedTextField(durationMins, { durationMins = it.filter(Char::isDigit).take(2) }, label = { Text("Minutes") }, modifier = Modifier.weight(1f), singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
                 }
                 if (!durationValid) Text("Choose 1 minute to 24 hours. Minutes must be 0–59.", color = MaterialTheme.colorScheme.error)
-                Text("Tap Start on the habit or its reminder notification to begin. When the timer runs to the end, it automatically checks in the habit for the day you started. Pause and Reset do not complete it.", fontSize = 11.sp)
+                Text("Open the focus timer from the task or reminder, then tap Start to begin. When the timer runs to the end, it automatically checks in the habit for the day you started. Pause and Reset do not complete it.", fontSize = 11.sp)
             }
             if (!planned && reminderSelected) Text("Without a separate work time, the reminder time reserves the start of your focus duration.", fontSize = 11.sp)
             if (clash != null) {

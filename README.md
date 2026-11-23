@@ -108,3 +108,10 @@ Removed the emoji picker from the task editor and emoji display from progress ca
 Short voice playback now holds a bounded 60-second partial wake lock during speech initialization/playback and releases it on service teardown. This uses the normal WAKE_LOCK permission; it does not keep the screen on or bypass Do Not Disturb.
 
 App-resume catch-up and opening an already-expired timer explicitly process completion with announcements disabled, even within the normal two-minute alarm grace period. Live alarm completion and timers that reach zero while their screen is open can still announce.
+
+
+## DailyStride 2.12 — Ready screen and bounded repeated speech
+
+Opening a timed task prepares a paused Ready session with a Start button, rather than counting immediately. Start / Pause / Resume also appear on the public timer notification. The full timer can stay above the keyguard where Android allows it; while visible and running, Keep focus screen awake holds the display on (user-switchable, power button still works). It does not force-launch an activity at alarm time or bypass Android lock-screen privacy/full-screen restrictions. Use View focus on the scheduled reminder, then Start. Actual Start refreshes the session's start date; partial-session resume preserves it.
+
+Voice repeats three times by default. Settings selects either 3–999 repetitions or a 1–1440 minute repeat period, with a three-second gap. There is no Once mode. A foreground Stop voice action ends playback. Repeats stop before the next registered regular reminder, snooze or active timer completion (500 ms safety margin); a newly delivered reminder interrupts the previous voice session rather than queueing behind it. A short boundary guard rechecks for newly scheduled reminders during playback. Starting stale requests remains prohibited, while explicitly selected ongoing repetitions may continue past the initial freshness window up to their chosen deadline. Quiet hours, calls, DND, audio focus, media volume and Stop voice still apply, and actual counts may be shortened to protect the next reminder. Android audio buffers and OEM behavior require device verification.

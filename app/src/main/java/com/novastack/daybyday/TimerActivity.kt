@@ -46,7 +46,7 @@ class TimerActivity : ComponentActivity() {
         var replacement = false
         if (requested != null) {
             getSystemService(android.app.NotificationManager::class.java).cancel(requested.id, 1)
-            if (existing == null || existing.clock.remaining(SystemClock.elapsedRealtime()) == 0L) timer.start(requested)
+            if (existing == null || existing.clock.remaining(SystemClock.elapsedRealtime()) == 0L) timer.prepare(requested)
             else if (existing.habitId != requested.id) replacement = true
         }
         setContent {
@@ -54,7 +54,7 @@ class TimerActivity : ComponentActivity() {
                 var replace by remember { mutableStateOf(replacement) }
                 if (replace && requested != null) AlertDialog(onDismissRequest = { replace = false }, title = { Text("Replace your active timer?") },
                     text = { Text("Only one focus timer runs at a time. Starting ${requested.name} will discard the current session.") },
-                    confirmButton = { TextButton(onClick = { timer.clear(); timer.start(requested); replace = false }) { Text("Replace timer") } },
+                    confirmButton = { TextButton(onClick = { timer.clear(); timer.prepare(requested); replace = false }) { Text("Replace timer") } },
                     dismissButton = { TextButton(onClick = { replace = false }) { Text("Keep current") } })
                 TimerScreen(timer, onBack = { finish() }, onComplete = {
                     val keyguard = getSystemService(KeyguardManager::class.java)
@@ -108,6 +108,12 @@ private fun TimerScreen(timer: FocusTimer, onBack: () -> Unit, onComplete: () ->
         }
     }
     val s = session
+    DisposableEffect(s?.clock?.running, visible) {
+        val keepAwake = owner.getSharedPreferences("settings", android.content.Context.MODE_PRIVATE).getBoolean("keepFocusAwake", true)
+        if (s?.clock?.running == true && visible && keepAwake) owner.window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        else owner.window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        onDispose { owner.window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
+    }
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).verticalScroll(rememberScrollState()).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(20.dp)) {
             TextButton(onClick = onBack, modifier = Modifier.align(Alignment.Start)) { Text("‹ Back to habits") }
@@ -124,7 +130,7 @@ private fun TimerScreen(timer: FocusTimer, onBack: () -> Unit, onComplete: () ->
                     }
                     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text(timeText(remaining), fontSize = 36.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
-                        Text(if (remaining == 0L) "SESSION COMPLETE" else if (s.clock.running) "STAY WITH THIS MOMENT" else "PAUSED", fontSize = 10.sp, color = MaterialTheme.colorScheme.primary)
+                        Text(if (remaining == 0L) "SESSION COMPLETE" else if (s.clock.running) "STAY WITH THIS MOMENT" else if (remaining == s.totalMs) "READY TO BEGIN" else "PAUSED", fontSize = 10.sp, color = MaterialTheme.colorScheme.primary)
                         Box(Modifier.size(64.dp), contentAlignment = Alignment.Center) {
                             Canvas(Modifier.fillMaxSize()) {
                                 drawArc(Color(0xFF19B691), -90f, (remaining % 1000) / 1000f * 360f, false, style = Stroke(3.dp.toPx(), cap = StrokeCap.Round))
@@ -138,13 +144,13 @@ private fun TimerScreen(timer: FocusTimer, onBack: () -> Unit, onComplete: () ->
                     Column { Text("ELAPSED", fontSize = 10.sp); Text(timeText(((s.totalMs - remaining).coerceAtLeast(0) / 1000) * 1000), fontSize = 18.sp, fontFamily = FontFamily.Monospace) }
                     Column { Text("REMAINING", fontSize = 10.sp); Text(timeText(remaining), fontSize = 18.sp, fontFamily = FontFamily.Monospace) }
                 }
-                if (remaining > 0L) Button(onClick = { timer.toggle(); session = timer.load() }, modifier = Modifier.fillMaxWidth().height(54.dp)) { Text(if (s.clock.running) "Pause session" else "Resume session") }
+                if (remaining > 0L) Button(onClick = { timer.toggle(); session = timer.load() }, modifier = Modifier.fillMaxWidth().height(54.dp)) { Text(if (s.clock.running) "Pause session" else if (remaining == s.totalMs) "Start session" else "Resume session") }
                 else {
                     Text(s.completionNote.ifBlank { "Finishing your session…" }, color = MaterialTheme.colorScheme.primary)
                     if (!s.autoChecked) Button(onClick = { message = onComplete(); session = timer.load() }, modifier = Modifier.fillMaxWidth()) { Text("Retry check-in") }
                 }
                 OutlinedButton(onClick = { confirmReset = true }, modifier = Modifier.fillMaxWidth()) { Text("Reset timer") }
-                Text("View timer from its lock-screen notification. The timer keeps time when the screen is off. Allow notifications and precise alarms for timely completion alerts. After a reboot, it pauses for you to review.", color = Color(0xFFADC6D7), fontSize = 11.sp)
+                Text("Use View timer on its lock-screen notification, then Start. The screen can stay awake while the running timer is visible; the power button still turns it off. The countdown continues with the screen off. Allow notifications and precise alarms for timely completion alerts. After a reboot, it pauses for you to review.", color = Color(0xFFADC6D7), fontSize = 11.sp)
             } else Text("Choose a habit with a focus duration, then tap Start.")
         }
     }

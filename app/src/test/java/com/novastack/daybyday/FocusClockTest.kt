@@ -4,6 +4,12 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class FocusClockTest {
+    @Test fun readyTimerWaitsForStart() {
+        val ready = FocusClock(60000)
+        assertFalse(ready.running)
+        assertEquals(60000L, ready.remaining(999999))
+        assertEquals(59000L, ready.resume(1000000).remaining(1001000))
+    }
     @Test fun countdownIncludesTimeAwayFromScreen() {
         val clock = FocusClock(60000).resume(1000)
         assertEquals(15000L, clock.remaining(46000))
