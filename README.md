@@ -95,3 +95,16 @@ Task cards retain the navy/cyan layout and overflow Edit/Delete menu. They now s
 The task editor now always displays a required reminder-time picker. New tasks cannot be saved until the user confirms a time; existing timed tasks retain their time, while editing a legacy untimed task requires selecting one. The save callback also rejects missing times. Fresh installs start with an empty list instead of untimed sample habits. Existing habits and legacy backups are preserved rather than being silently assigned times.
 
 For a new task, Speak reminder aloud defaults on once both notifications and precise-alarm access are available. The user can turn it off per task; that choice remains respected. The editor responds to permission changes while open unless the user has already changed its voice switch. Existing tasks retain their saved voice choice. Quiet hours, device audio settings, installed TTS voices and background restrictions still apply. Timer-completion speech remains a separate Settings choice.
+
+
+## DailyStride 2.11 — Voice reliability, expiry and emoji removal
+
+Reminder broadcasts now carry a due timestamp and the configured reminder time. The receiver captures the occurrence before rescheduling, rejects unknown/future/edited/duplicate occurrences, and deduplicates delivered timestamps. Speech is allowed only within two minutes of its due time; delayed reminders use a silent Missed reminders channel. Speech rechecks its expiry after TTS initialization and before playing queued utterances. Expired focus sessions still save automatic check-ins, but delayed completion is processed silently instead of announcing an old alarm when the app reopens.
+
+The TTS service no longer stops simply because music or notification audio is active, nor destroys an initializing utterance when another arrives. It uses a bounded fresh queue, media-volume/navigation-guidance audio, transient ducking audio focus, and visible Settings diagnostics for blocked permissions/channels, quiet hours, DND, silent/vibrate mode, active calls, zero media volume, unavailable language data, TTS errors and Android background-service restrictions. Preview voice is started by explicit user action and does not require the exact-alarm background exemption. No retry is replayed when the app is opened. Music may be lowered briefly during speech. Notification/precise-alarm permissions and device restrictions still apply; physical-device verification is required.
+
+Removed the emoji picker from the task editor and emoji display from progress cards. Existing emoji fields remain in storage and backup formats for backward compatibility; native app/status icons are unchanged.
+
+Short voice playback now holds a bounded 60-second partial wake lock during speech initialization/playback and releases it on service teardown. This uses the normal WAKE_LOCK permission; it does not keep the screen on or bypass Do Not Disturb.
+
+App-resume catch-up and opening an already-expired timer explicitly process completion with announcements disabled, even within the normal two-minute alarm grace period. Live alarm completion and timers that reach zero while their screen is open can still announce.

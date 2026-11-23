@@ -87,10 +87,14 @@ class FocusTimer(private val context: Context) {
             } catch (_: SecurityException) { alarms.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, at, alarm()) }
         }
     }
-    fun finish() {
+    fun finish(announce: Boolean = true) {
         val s = load() ?: return
         if (s.clock.remaining(SystemClock.elapsedRealtime()) > 0) return
         if (s.notified) return
+        val nowElapsed = SystemClock.elapsedRealtime()
+        val dueElapsed = s.clock.anchorMs + s.clock.remainingMs
+        val fresh = s.clock.running && ReminderDelivery.isFresh(dueElapsed, nowElapsed)
+        val dueWall = System.currentTimeMillis() - (nowElapsed - dueElapsed).coerceAtLeast(0)
         var checked = false
         val note = if (!s.clock.running) "Session ended after restart. Review your habit before checking in." else try {
             val store = HabitStore(context)
@@ -114,16 +118,14 @@ class FocusTimer(private val context: Context) {
         notifyManager().cancel(901)
         ReminderScheduler.channel(context)
         val open = PendingIntent.getActivity(context, 902, Intent(context, TimerActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        val notification = Notification.Builder(context, ReminderScheduler.CHANNEL).setSmallIcon(R.drawable.ic_notification)
+        val notification = Notification.Builder(context, if (fresh && announce) ReminderScheduler.CHANNEL else ReminderScheduler.MISSED_CHANNEL).setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("Focus complete: ${s.name}").setContentText(note)
             .setContentIntent(open).setAutoCancel(true).build()
         try { notifyManager().notify(904, notification) } catch (_: SecurityException) { }
         val settings = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
-        if (settings.getBoolean("speakTimerEnd", false) && ReminderScheduler.exactAllowed(context) && notifyManager().areNotificationsEnabled()) {
-            try {
-                context.startForegroundService(Intent(context, VoiceReminderService::class.java)
-                    .putExtra("name", s.name).putExtra("completedTimer", true))
-            } catch (_: Exception) { /* Completion notification stays available when Android blocks background speech. */ }
+        if (settings.getBoolean("speakTimerEnd", false)) {
+            if (fresh && announce) VoicePlayback.start(context, s.name, dueWall, completed = true, token = "focus/${s.habitId}/${s.clock.anchorMs}")
+            else VoiceDiagnostics.record(context, "Focus session ended earlier. Completion was processed silently; no old voice alarm was replayed.")
         }
     }
 }

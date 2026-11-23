@@ -42,7 +42,7 @@ class TimerActivity : ComponentActivity() {
         val timer = FocusTimer(this)
         val requested = try { HabitStore(this).load().find { it.id == intent.getStringExtra("habitId") && it.durationMinutes > 0 } } catch (_: Exception) { null }
         val existing = timer.load()
-        if (existing != null && !existing.notified && existing.clock.remaining(SystemClock.elapsedRealtime()) == 0L) timer.finish()
+        if (existing != null && !existing.notified && existing.clock.remaining(SystemClock.elapsedRealtime()) == 0L) timer.finish(announce = false)
         var replacement = false
         if (requested != null) {
             getSystemService(android.app.NotificationManager::class.java).cancel(requested.id, 1)

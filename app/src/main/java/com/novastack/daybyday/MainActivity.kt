@@ -91,6 +91,7 @@ private fun DayByDay(activity: MainActivity) {
     var lockTimer by remember { mutableStateOf(prefs.getBoolean("lockTimer", true)) }
     var speakTimerEnd by remember { mutableStateOf(prefs.getBoolean("speakTimerEnd", false)) }
     var sayTime by remember { mutableStateOf(prefs.getBoolean("sayTime", true)) }
+    var lastVoiceStatus by remember { mutableStateOf(VoiceDiagnostics.latest(activity)) }
     var notifications by remember { mutableStateOf(notificationsAllowed(activity)) }
     var exact by remember { mutableStateOf(ReminderScheduler.exactAllowed(activity)) }
     var editing by remember { mutableStateOf<Habit?>(null) }
@@ -147,10 +148,11 @@ private fun DayByDay(activity: MainActivity) {
     fun refresh() {
         val now = LocalDate.now()
         if (now != today) { today = now; selected = now }
+        lastVoiceStatus = VoiceDiagnostics.latest(activity)
         notifications = notificationsAllowed(activity)
         exact = ReminderScheduler.exactAllowed(activity)
         FocusTimer(activity).load()?.let { session ->
-            if (!session.notified && session.clock.remaining(android.os.SystemClock.elapsedRealtime()) == 0L) FocusTimer(activity).finish()
+            if (!session.notified && session.clock.remaining(android.os.SystemClock.elapsedRealtime()) == 0L) FocusTimer(activity).finish(announce = false)
         }
     }
     DisposableEffect(activity) {
@@ -163,9 +165,12 @@ private fun DayByDay(activity: MainActivity) {
         val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
             if (key == "items" && loadError == null) try { habits = store.load() } catch (_: Exception) { }
         }
+        val voiceStatusPrefs = activity.getSharedPreferences("voice_status", android.content.Context.MODE_PRIVATE)
+        val voiceListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> lastVoiceStatus = VoiceDiagnostics.latest(activity) }
+        voiceStatusPrefs.registerOnSharedPreferenceChangeListener(voiceListener)
         saved.registerOnSharedPreferenceChangeListener(listener)
         activity.lifecycle.addObserver(observer)
-        onDispose { activity.lifecycle.removeObserver(observer); saved.unregisterOnSharedPreferenceChangeListener(listener) }
+        onDispose { activity.lifecycle.removeObserver(observer); saved.unregisterOnSharedPreferenceChangeListener(listener); voiceStatusPrefs.unregisterOnSharedPreferenceChangeListener(voiceListener) }
     }
     LaunchedEffect(Unit) { while (true) { refresh(); delay(30_000) } }
     val existingConflict = remember(habits, today) { ScheduleConflict.firstIn(habits, today) }
@@ -243,7 +248,7 @@ private fun DayByDay(activity: MainActivity) {
                     val complete = dates.sumOf { d -> habits.count { it.scheduled(d) && d in it.completed } }
                     item { SurfaceCard { Text("LAST 30 DAYS", color = colors.primary); Text("$complete / $possible check-ins", fontSize = 26.sp, fontWeight = FontWeight.Bold); Text("Missed a day? Your progress still counts. Begin again today.") } }
                     items(habits, key = { it.id }) { h -> SurfaceCard {
-                        Text("${h.emoji}  ${h.name}", fontWeight = FontWeight.Bold)
+                        Text(h.name, fontWeight = FontWeight.Bold)
                         Text("${h.streak(today)} scheduled-day streak • ${h.completed.size} lifetime check-ins")
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             (6L downTo 0L).forEach { n ->
@@ -265,7 +270,7 @@ private fun DayByDay(activity: MainActivity) {
                         Text("Reminders & voice", fontSize = 20.sp, fontWeight = FontWeight.Bold)
                         Text("${if (notifications) "Notifications enabled" else "Notifications are blocked"} • ${if (exact) "Precise timing allowed" else "Timing may be delayed"}", fontSize = 12.sp)
                         Button(onClick = {
-                            if (Build.VERSION.SDK_INT >= 33 && !notifications) permission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            if (Build.VERSION.SDK_INT >= 33 && activity.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) permission.launch(Manifest.permission.POST_NOTIFICATIONS)
                             else activity.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, activity.packageName))
                         }) { Text("Notification permission") }
                         if (Build.VERSION.SDK_INT >= 31 && !exact) OutlinedButton(onClick = {
@@ -285,9 +290,16 @@ private fun DayByDay(activity: MainActivity) {
                         SettingToggle("Prefer Hausa voice", "Uses English if your TTS engine lacks Hausa", hausa) { hausa = it; prefs.edit().putBoolean("hausaVoice", it).apply() }
                         OutlinedButton(onClick = {
                             if (!notifications) message = "Allow notifications first to preview the voice."
-                            else activity.startForegroundService(Intent(activity, VoiceReminderService::class.java).putExtra("name", if (hausa) "shan ruwa" else "drinking water"))
+                            else VoicePlayback.start(activity, if (hausa) "shan ruwa" else "drinking water", System.currentTimeMillis(), preview = true)
                         }) { Text("Test voice reminder") }
-                        Text("Task names are spoken aloud. Only enable voice for habits you are comfortable hearing in public. Silent mode, quiet hours and active music suppress speech. Your device needs an installed Text-to-Speech voice.", fontSize = 12.sp)
+                        Text("Task names are spoken aloud. Silent/vibrate mode, quiet hours, calls and Do Not Disturb suppress speech. Voice uses media volume and may briefly lower music volume. Your device needs an installed Text-to-Speech voice.", fontSize = 12.sp)
+                        Text("Voice status", fontWeight = FontWeight.Bold)
+                        Text(lastVoiceStatus, fontSize = 12.sp, color = colors.primary)
+                        OutlinedButton(onClick = {
+                            try { activity.startActivity(Intent("com.android.settings.TTS_SETTINGS")) }
+                            catch (_: android.content.ActivityNotFoundException) { activity.startActivity(Intent(Settings.ACTION_SETTINGS)) }
+                        }) { Text("Open Text-to-Speech settings") }
+                        OutlinedButton(onClick = { activity.startActivity(Intent(Settings.ACTION_SOUND_SETTINGS)) }) { Text("Check media volume & sound") }
                     } }
                     item { SurfaceCard {
                         Text("Keep your progress safe", fontSize = 20.sp, fontWeight = FontWeight.Bold)
@@ -312,7 +324,7 @@ private fun DayByDay(activity: MainActivity) {
                         TextButton(onClick = { openExternal("mailto:mumgloballink@gmail.com?subject=DailyStride%20support", email = true) }) { Text("Email Nova Stack") }
                         Text("mumgloballink@gmail.com", fontSize = 12.sp)
                     } }
-                    item { Text("DailyStride • Version 2.10\nSmall steps. Lasting change.", color = colors.primary, modifier = Modifier.padding(vertical = 16.dp)) }
+                    item { Text("DailyStride • Version 2.11\nSmall steps. Lasting change.", color = colors.primary, modifier = Modifier.padding(vertical = 16.dp)) }
                 }
             }
         }
@@ -341,8 +353,7 @@ private fun DayByDay(activity: MainActivity) {
     }
 }
 
-private fun notificationsAllowed(activity: MainActivity): Boolean = activity.getSystemService(NotificationManager::class.java).areNotificationsEnabled() &&
-    (Build.VERSION.SDK_INT < 33 || activity.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED)
+private fun notificationsAllowed(activity: MainActivity): Boolean = ReminderScheduler.notificationsAllowed(activity)
 
 @Composable
 private fun SurfaceCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
@@ -539,7 +550,7 @@ private fun SettingToggle(title: String, detail: String, checked: Boolean, chang
 @Composable
 private fun HabitEditor(habit: Habit?, allHabits: List<Habit>, voiceAllowed: Boolean, onDismiss: () -> Unit, onSave: (String, String, Set<Int>, String?, Boolean, LocalDate, Int, String?) -> Unit) {
     var name by remember { mutableStateOf(habit?.name ?: "") }
-    var emoji by remember { mutableStateOf(habit?.emoji ?: "🌱") }
+    val emoji = habit?.emoji ?: "🌱"
     var days by remember { mutableStateOf(habit?.days ?: (1..7).toSet()) }
     var reminderSelected by remember { mutableStateOf(habit?.reminder != null) }
     val context = LocalContext.current
@@ -566,9 +577,6 @@ private fun HabitEditor(habit: Habit?, allHabits: List<Habit>, voiceAllowed: Boo
     AlertDialog(onDismissRequest = onDismiss, title = { Text(if (habit == null) "A fresh start" else "Edit your ritual") },
         text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             OutlinedTextField(value = name, onValueChange = { name = it.take(60) }, label = { Text("Habit name") }, singleLine = true)
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                listOf("🌱", "💧", "🏃", "📚", "🧘", "💤").forEach { icon -> Text(icon, fontSize = 23.sp, modifier = Modifier.background(if (emoji == icon) MaterialTheme.colorScheme.primary.copy(alpha = 0.3f) else Color.Transparent, RoundedCornerShape(8.dp)).clickable { emoji = icon }.padding(4.dp)) }
-            }
             Text("Start date", fontWeight = FontWeight.Bold)
             OutlinedButton(onClick = {
                 DatePickerDialog(context, { _, year, month, day -> startDate = LocalDate.of(year, month + 1, day) },
